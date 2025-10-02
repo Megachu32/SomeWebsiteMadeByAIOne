@@ -43,6 +43,8 @@
             align-items: center;
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            text-align: center; /* Center text if it wraps */
+            padding: 10px; /* Add some padding */
         }
 
         .card:hover {
@@ -59,33 +61,37 @@
 </head>
 <body>
 
-    <h1>My <strong>(AI)</strong> Work Portfolio</h1>
+    <h1>My Work Portfolio</h1>
 
     <div id="portfolio-container">
         </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // --- IMPORTANT ---
-            // This is the list of your project folders.
-            // When you add a new folder like "work4", just add it to this list.
-            const projectFolders = ['work1', 'work2', 'work3'];
+            // --- NEW AND IMPROVED ---
+            // This is now an array of objects.
+            // 'folder' is the actual folder name.
+            // 'title' is what will be displayed on the card.
+            const projects = [
+                { folder: 'work1', title: 'Kalkulator Matriks' },
+                { folder: 'work2', title: 'DFT & IDFT 1D' },
+                { folder: 'work3', title: 'DFT & IDFT 2D' }
+            ];
 
             const container = document.getElementById('portfolio-container');
 
-            // Loop through each folder name in the list
-            projectFolders.forEach(folderName => {
+            // Loop through each project object in the list
+            projects.forEach(project => {
                 // 1. Create the link element (the card itself)
                 const cardLink = document.createElement('a');
                 cardLink.className = 'card';
-                cardLink.href = `./${folderName}/index.html`; // Sets the link to the correct path
+                // Use project.folder for the link's path
+                cardLink.href = `./${project.folder}/index.html`;
 
                 // 2. Create the title element inside the card
                 const cardTitle = document.createElement('h2');
-                
-                // Format the text for display (e.g., "work1" becomes "Work 1")
-                const displayName = folderName.charAt(0).toUpperCase() + folderName.slice(1, 4) + ' ' + folderName.slice(4);
-                cardTitle.textContent = displayName;
+                // Use project.title for the display text
+                cardTitle.textContent = project.title;
 
                 // 3. Put the title inside the card link
                 cardLink.appendChild(cardTitle);
