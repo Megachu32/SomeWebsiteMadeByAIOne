@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator DFT & IDFT</title>
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+    body {
+        font-family: sans-serif;
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column; /* Mengatur layout utama menjadi vertikal */
+    }
+    .menustrip {
+        background-color: #333;
+        padding: 10px;
+        display: flex;
+        gap: 10px;
+    }
+    .menu-btn {
+        background-color: #555;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-size: 1em;
+        border-radius: 5px;
+    }
+    .menu-btn.active {
+        background-color: #007bff;
+    }
+    .content-container {
+        display: flex;
+        flex-grow: 1; /* Membuat container ini mengisi sisa ruang */
+        overflow: hidden; /* Mencegah scrolling ganda */
+    }
+    .main-content {
+        flex-grow: 1;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .page {
+        display: none; /* Sembunyikan semua halaman secara default */
+    }
+    .page.active {
+        display: flex; /* Tampilkan halaman yang aktif */
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+    }
+    .sidebar {
+        width: 350px;
+        background-color: #f4f4f4;
+        padding: 20px;
+        border-left: 1px solid #ddd;
+        transition: width 0.3s;
+        overflow-y: auto;
+    }
+    .sidebar.collapsed {
+        width: 0;
+        padding: 0;
+        border-left: none;
+    }
+    .sidebar-content { display: block; }
+    .sidebar.collapsed .sidebar-content { display: none; }
+    .toggle-btn {
+        position: fixed;
+        right: 10px;
+        top: 55px; /* Sesuaikan posisi agar di bawah menustrip */
+        cursor: pointer;
+        z-index: 1000;
+        background: #ddd;
+        border: 1px solid #ccc;
+        padding: 5px 10px;
+        border-radius: 5px;
+    }
+    .array-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        min-height: 60px;
+    }
+    .array-box, .complex-input-container {
+        border: 1px solid #000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
+    }
+    .array-box {
+        width: 80px; /* Lebarkan sedikit untuk label */
+        height: 50px;
+        font-size: 0.9em; /* Kecilkan font agar muat */
+        flex-direction: column;
+        align-items: flex-start; /* Ratakan teks ke kiri */
+        padding: 5px;
+    }
+    input.array-box {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2em;
+        text-align: center;
+        padding: 0; /* Reset padding untuk input */
+    }
+
+    /* --- MODIFIKASI TAMPILAN DIMULAI DISINI --- */
+    .complex-input-container {
+        width: 85px;
+        height: 55px;
+        flex-direction: column;
+        padding: 4px;
+        gap: 2px;
+    }
+    .complex-input-row {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 3px;
+    }
+    .complex-input-row label {
+        font-size: 0.9em;
+        font-weight: bold;
+        margin: 0;
+    }
+    .complex-input-row input {
+        width: 100%;
+        text-align: center;
+        border: 1px solid #ccc;
+        font-size: 0.9em;
+    }
+    /* --- MODIFIKASI TAMPILAN SELESAI DISINI --- */
+    
+    .controls {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin: 20px 0;
+    }
+    button {
+        padding: 10px 20px;
+        font-size: 1em;
+        cursor: pointer;
+    }
+    .input-section { margin-bottom: 20px; }
+    label { margin-right: 10px; }
+    input[type="number"] { width: 60px; padding: 5px; }
+    h2 { margin-top: 0; }
+    .step {
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+</style>
+</head>
+<body>
+
+<div class="menustrip">
+    <button id="btn-dft" class="menu-btn active" onclick="showPage('dft')">DFT</button>
+    <button id="btn-idft" class="menu-btn" onclick="showPage('idft')">IDFT</button>
+</div>
+
+<div class="content-container">
+    <div class="main-content">
+        <!-- Halaman DFT -->
+        <div id="dft-page" class="page active">
+            <div>
+                <div class="input-section">
+                    <label for="box-count-dft">Jumlah Kotak:</label>
+                    <input type="number" id="box-count-dft" value="5" min="1" max="20">
+                </div>
+                <h2>Kotak Atas (Input)</h2>
+                <div id="top-array-dft" class="array-container"></div>
+            </div>
+            <div class="controls">
+                <button id="random-btn-dft">Random</button>
+                <button id="process-btn-dft">Process DFT</button>
+            </div>
+            <div>
+                <h2>Kotak Bawah (Hasil DFT)</h2>
+                <div id="bottom-array-dft" class="array-container"></div>
+            </div>
+        </div>
+
+        <!-- Halaman IDFT -->
+        <div id="idft-page" class="page">
+             <div>
+                <div class="input-section">
+                    <label for="box-count-idft">Jumlah Kotak:</label>
+                    <input type="number" id="box-count-idft" value="5" min="1" max="20">
+                </div>
+                <h2>Kotak Atas (Input Kompleks)</h2>
+                <div id="top-array-idft" class="array-container"></div>
+            </div>
+            <div class="controls">
+                <button id="process-btn-idft">Process IDFT</button>
+            </div>
+            <div>
+                <h2>Kotak Bawah (Hasil Inverse)</h2>
+                <div id="bottom-array-idft" class="array-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <h2>Langkah Perhitungan</h2>
+            <div id="steps-container">
+                <p>Pilih mode dan klik tombol "Process" untuk melihat langkah-langkahnya.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toggle-btn" onclick="toggleSidebar()">☰</div>
+
+<script>
+    const stepsContainer = document.getElementById('steps-container');
+
+    // --- LOGIKA UNTUK GANTI HALAMAN ---
+    function showPage(pageName) {
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        document.getElementById(pageName + '-page').classList.add('active');
+        
+        document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('btn-' + pageName).classList.add('active');
+        stepsContainer.innerHTML = `<p>Pilih mode dan klik tombol "Process" untuk melihat langkah-langkahnya.</p>`;
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('collapsed');
+    }
+
+    // --- BAGIAN LOGIKA DFT ---
+    const boxCountInputDFT = document.getElementById('box-count-dft');
+    const topArrayContainerDFT = document.getElementById('top-array-dft');
+    const bottomArrayContainerDFT = document.getElementById('bottom-array-dft');
+    
+    function createBoxesDFT(count) {
+        topArrayContainerDFT.innerHTML = '';
+        bottomArrayContainerDFT.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const topBox = document.createElement('input');
+            topBox.className = 'array-box';
+            topBox.type = 'number';
+            topBox.min = 0; topBox.max = 9;
+            topArrayContainerDFT.appendChild(topBox);
+
+            const bottomBox = document.createElement('div');
+            bottomBox.className = 'array-box';
+            bottomArrayContainerDFT.appendChild(bottomBox);
+        }
+    }
+
+    document.getElementById('random-btn-dft').addEventListener('click', () => {
+        const boxes = topArrayContainerDFT.children;
+        for (let box of boxes) {
+            box.value = Math.floor(Math.random() * 10);
+        }
+    });
+
+    document.getElementById('process-btn-dft').addEventListener('click', () => {
+        const topBoxes = topArrayContainerDFT.children;
+        const bottomBoxes = bottomArrayContainerDFT.children;
+        const m = topBoxes.length;
+        stepsContainer.innerHTML = '<h2>Perhitungan DFT</h2>';
+
+        for (let u = 0; u < m; u++) {
+            let sumReal = 0, sumImag = 0;
+            let stepHtml = `<div class="step"><h3>Menghitung F(${u}):</h3><p>\\(F(u) = \\sum_{x=0}^{${m-1}} f(x) e^{-i2\\pi ux/m}\\)</p>`;
+            for (let x = 0; x < m; x++) {
+                const fx = parseInt(topBoxes[x].value) || 0;
+                const angle = (2 * Math.PI * u * x) / m;
+                const realPart = Math.cos(angle);
+                const imagPart = -Math.sin(angle);
+                sumReal += fx * realPart;
+                sumImag += fx * imagPart;
+                stepHtml += `<p><b>x=${x}:</b> \\(f(${x}) e^{-i...} = ${fx} (\\cos(${angle.toFixed(2)}) - i\\sin(${angle.toFixed(2)})) = ${(fx*realPart).toFixed(2)} + i(${(fx*imagPart).toFixed(2)})\\)</p>`;
+            }
+            stepHtml += `<p><b>Total:</b> \\(F(${u}) = ${sumReal.toFixed(4)} + i(${sumImag.toFixed(4)})\\)</p></div>`;
+            stepsContainer.innerHTML += stepHtml;
+            
+            // --- MODIFIKASI TAMPILAN DIMULAI DISINI ---
+            bottomBoxes[u].innerHTML = `<div><b>Re:</b> ${sumReal.toFixed(2)}</div><div><b>Im:</b> ${sumImag.toFixed(2)}</div>`;
+            // --- MODIFIKASI TAMPILAN SELESAI DISINI ---
+        }
+        MathJax.typeset();
+    });
+    boxCountInputDFT.addEventListener('change', () => createBoxesDFT(boxCountInputDFT.value));
+
+    // --- BAGIAN LOGIKA IDFT ---
+    const boxCountInputIDFT = document.getElementById('box-count-idft');
+    const topArrayContainerIDFT = document.getElementById('top-array-idft');
+    const bottomArrayContainerIDFT = document.getElementById('bottom-array-idft');
+
+    function createBoxesIDFT(count) {
+        topArrayContainerIDFT.innerHTML = '';
+        bottomArrayContainerIDFT.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const topBoxContainer = document.createElement('div');
+            topBoxContainer.className = 'complex-input-container';
+            
+            // --- MODIFIKASI TAMPILAN DIMULAI DISINI ---
+            topBoxContainer.innerHTML = `
+                <div class="complex-input-row">
+                    <label>Re:</label>
+                    <input type="number" value="0">
+                </div>
+                <div class="complex-input-row">
+                    <label>Im:</label>
+                    <input type="number" value="0">
+                </div>
+            `;
+            // --- MODIFIKASI TAMPILAN SELESAI DISINI ---
+            
+            topArrayContainerIDFT.appendChild(topBoxContainer);
+
+            const bottomBox = document.createElement('div');
+            // Kembalikan style .array-box ke default untuk hasil IDFT
+            bottomBox.className = 'array-box';
+            bottomBox.style.width = '50px';
+            bottomBox.style.fontSize = '1.2em';
+            bottomBox.style.alignItems = 'center';
+            bottomBox.style.padding = '0';
+            bottomArrayContainerIDFT.appendChild(bottomBox);
+        }
+    }
+    
+    document.getElementById('process-btn-idft').addEventListener('click', () => {
+        const topBoxesContainers = topArrayContainerIDFT.children;
+        const bottomBoxes = bottomArrayContainerIDFT.children;
+        const m = topBoxesContainers.length;
+        stepsContainer.innerHTML = '<h2>Perhitungan IDFT</h2>';
+
+        for (let x = 0; x < m; x++) {
+            let sumReal = 0, sumImag = 0;
+            let stepHtml = `<div class="step"><h3>Menghitung f(${x}):</h3><p>\\(f(x) = \\frac{1}{${m}} \\sum_{u=0}^{${m-1}} F(u) e^{i2\\pi ux/m}\\)</p>`;
+            for (let u = 0; u < m; u++) {
+                const inputs = topBoxesContainers[u].getElementsByTagName('input');
+                const Fu_real = parseFloat(inputs[0].value) || 0;
+                const Fu_imag = parseFloat(inputs[1].value) || 0;
+                const angle = (2 * Math.PI * u * x) / m;
+                const cosAngle = Math.cos(angle);
+                const sinAngle = Math.sin(angle);
+                
+                sumReal += Fu_real * cosAngle - Fu_imag * sinAngle;
+                sumImag += Fu_real * sinAngle + Fu_imag * cosAngle;
+
+                stepHtml += `<p><b>u=${u}:</b> F(${u})e^{i...} = (${Fu_real} + i${Fu_imag})(\\cos(${angle.toFixed(2)}) + i\\sin(${angle.toFixed(2)}))</p>`;
+            }
+            const finalReal = sumReal / m;
+            const finalImag = sumImag / m;
+
+            stepHtml += `<p><b>Total Sum:</b> ${sumReal.toFixed(4)} + i(${sumImag.toFixed(4)})</p>`;
+            stepHtml += `<p><b>Hasil f(${x}) = Total / ${m}:</b> ${finalReal.toFixed(4)} + i(${finalImag.toFixed(4)})</p></div>`;
+            stepsContainer.innerHTML += stepHtml;
+            bottomBoxes[x].textContent = Math.round(finalReal);
+        }
+        MathJax.typeset();
+    });
+    boxCountInputIDFT.addEventListener('change', () => createBoxesIDFT(boxCountInputIDFT.value));
+
+    // --- INISIALISASI AWAL ---
+    createBoxesDFT(boxCountInputDFT.value);
+    createBoxesIDFT(boxCountInputIDFT.value);
+</script>
+
+</body>
+</html>

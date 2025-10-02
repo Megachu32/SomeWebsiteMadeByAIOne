@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator DFT & IDFT 2D</title>
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+    :root { --box-size: 55px; }
+    body { font-family: sans-serif; margin: 0; height: 100vh; display: flex; flex-direction: column; }
+    .menustrip { background-color: #333; padding: 10px; display: flex; gap: 10px; }
+    .menu-btn { background-color: #555; color: white; border: none; padding: 10px 15px; cursor: pointer; font-size: 1em; border-radius: 5px; }
+    .menu-btn.active { background-color: #007bff; }
+    .content-container { display: flex; flex-grow: 1; overflow: hidden; }
+    .main-content { flex-grow: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
+    .page { display: none; }
+    .page.active { display: flex; flex-direction: column; }
+    .sidebar { width: 400px; background-color: #f4f4f4; padding: 20px; border-left: 1px solid #ddd; transition: width 0.3s; overflow-y: auto; }
+    .sidebar.collapsed { width: 0; padding: 0; border-left: none; }
+    .sidebar-content { display: block; }
+    .sidebar.collapsed .sidebar-content { display: none; }
+    .toggle-btn { position: fixed; right: 10px; top: 55px; cursor: pointer; z-index: 1000; background: #ddd; border: 1px solid #ccc; padding: 5px 10px; border-radius: 5px; }
+    
+    /* Grid Styling */
+    .grid-controls { display: flex; gap: 20px; margin-bottom: 15px; align-items: center; }
+    .grid-controls label { font-weight: bold; }
+    .array-container { display: grid; gap: 5px; margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9; }
+    .array-box { width: var(--box-size); height: var(--box-size); border: 1px solid #999; display: flex; justify-content: center; align-items: center; box-sizing: border-box; font-size: 1em; background-color: white; }
+    input.array-box { text-align: center; padding: 0; }
+    .complex-output-box { font-size: 0.8em; flex-direction: column; align-items: flex-start; padding: 4px; gap: 2px; }
+    .complex-input-container { width: 85px; height: 55px; border: 1px solid #999; display: flex; flex-direction: column; padding: 4px; gap: 2px; background-color: white; }
+    .complex-input-row { display: flex; align-items: center; width: 100%; gap: 3px; }
+    .complex-input-row label { font-size: 0.9em; font-weight: bold; margin: 0; }
+    .complex-input-row input { width: 100%; text-align: center; border: 1px solid #ccc; font-size: 0.9em; }
+
+    .controls { display: flex; justify-content: center; gap: 20px; margin: 10px 0; }
+    button { padding: 10px 20px; font-size: 1em; cursor: pointer; }
+    h2, h3 { margin-top: 0; }
+    .step { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+    .step h4, .step h5 { margin: 8px 0 2px 0; }
+    .step p { margin: 2px 0 2px 15px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<!-- HTML tetap sama seperti sebelumnya -->
+<div class="menustrip">
+    <button id="btn-dft" class="menu-btn active" onclick="showPage('dft')">DFT 2D</button>
+    <button id="btn-idft" class="menu-btn" onclick="showPage('idft')">IDFT 2D</button>
+</div>
+<div class="content-container">
+    <div class="main-content">
+        <div id="dft-page" class="page active">
+            <div class="grid-controls"><label for="cols-dft">Kolom (M):</label><input type="number" id="cols-dft" value="4" min="1" max="10"><label for="rows-dft">Baris (N):</label><input type="number" id="rows-dft" value="4" min="1" max="10"></div><h2>Input f(x, y)</h2><div id="top-array-dft" class="array-container"></div><div class="controls"><button id="random-btn-dft">Random</button><button id="process-btn-dft">Process DFT</button></div><h2>Output F(u, v)</h2><div id="bottom-array-dft" class="array-container"></div>
+        </div>
+        <div id="idft-page" class="page">
+             <div class="grid-controls"><label for="cols-idft">Kolom (M):</label><input type="number" id="cols-idft" value="4" min="1" max="10"><label for="rows-idft">Baris (N):</label><input type="number" id="rows-idft" value="4" min="1" max="10"></div><h2>Input F(u, v)</h2><div id="top-array-idft" class="array-container"></div><div class="controls"><button id="process-btn-idft">Process IDFT</button></div><h2>Output f(x, y)</h2><div id="bottom-array-idft" class="array-container"></div>
+        </div>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content"><h2>Langkah Perhitungan</h2><div id="steps-container"><p>Atur ukuran grid dan klik "Process".</p></div></div>
+    </div>
+</div>
+<div class="toggle-btn" onclick="toggleSidebar()">☰</div>
+
+<script>
+class Complex {
+    constructor(real, imag) { this.real = real; this.imag = imag; }
+    add(c) { return new Complex(this.real + c.real, this.imag + c.imag); }
+    multiply(c) { return new Complex(this.real * c.real - this.imag * c.imag, this.real * c.imag + this.imag * c.real); }
+    divide(scalar) { return new Complex(this.real / scalar, this.imag / scalar); }
+    toString() { return `${this.real.toFixed(2)} + ${this.imag.toFixed(2)}i`; }
+}
+
+const stepsContainer = document.getElementById('steps-container');
+function showPage(pageName) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    document.getElementById(pageName + '-page').classList.add('active');
+    document.querySelectorAll('.menu-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('btn-' + pageName).classList.add('active');
+    stepsContainer.innerHTML = `<p>Atur ukuran grid dan klik "Process".</p>`;
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+function createGrid(rows, cols, container, boxCreator) {
+    container.innerHTML = '';
+    container.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+    for (let i = 0; i < rows * cols; i++) { container.appendChild(boxCreator(i)); }
+}
+
+// --- LOGIKA DFT 2D ---
+const colsDFT = document.getElementById('cols-dft');
+const rowsDFT = document.getElementById('rows-dft');
+const topGridDFT = document.getElementById('top-array-dft');
+const bottomGridDFT = document.getElementById('bottom-array-dft');
+
+function setupGridsDFT() {
+    const M = parseInt(colsDFT.value), N = parseInt(rowsDFT.value);
+    createGrid(N, M, topGridDFT, () => { const box = document.createElement('input'); box.className = 'array-box'; box.type = 'number'; box.value = 0; box.min = 0; box.max = 9; return box; });
+    createGrid(N, M, bottomGridDFT, () => { const box = document.createElement('div'); box.className = 'array-box complex-output-box'; return box; });
+}
+document.getElementById('random-btn-dft').addEventListener('click', () => { topGridDFT.childNodes.forEach(box => { box.value = Math.floor(Math.random() * 10); }); });
+
+document.getElementById('process-btn-dft').addEventListener('click', () => {
+    const M = parseInt(colsDFT.value), N = parseInt(rowsDFT.value);
+    const inputDOM = topGridDFT.childNodes, outputDOM = bottomGridDFT.childNodes;
+    stepsContainer.innerHTML = '<h2>Perhitungan DFT 2D</h2>';
+    let inputGrid = Array.from({ length: N }, (_, y) => Array.from({ length: M }, (_, x) => new Complex(parseInt(inputDOM[y * M + x].value) || 0, 0)));
+
+    stepsContainer.innerHTML += '<h3>Tahap 1: Menjalankan 1D DFT pada setiap Baris</h3>';
+    let intermediateGrid = inputGrid.map((row, y) => {
+        const rowResult = dft1D(row);
+        stepsContainer.innerHTML += `<div class="step"><h4>Baris ${y}</h4>${rowResult.stepsHtml}</div>`;
+        return rowResult.result;
+    });
+
+    stepsContainer.innerHTML += '<h3>Tahap 2: Menjalankan 1D DFT pada setiap Kolom</h3>';
+    let finalGrid = Array.from({ length: N }, () => Array(M));
+    for (let u = 0; u < M; u++) {
+        let col = intermediateGrid.map(row => row[u]);
+        const colResult = dft1D(col);
+        stepsContainer.innerHTML += `<div class="step"><h4>Kolom ${u}</h4>${colResult.stepsHtml}</div>`;
+        colResult.result.forEach((value, v) => { finalGrid[v][u] = value; });
+    }
+
+    for (let v = 0; v < N; v++) { for (let u = 0; u < M; u++) { const c = finalGrid[v][u]; outputDOM[v * M + u].innerHTML = `<b>Re:</b> ${c.real.toFixed(2)}<br><b>Im:</b> ${c.imag.toFixed(2)}`; } }
+    MathJax.typeset();
+});
+
+// --- MODIFIKASI DIMULAI DISINI ---
+function dft1D(vector) {
+    const K = vector.length;
+    let result = [];
+    let stepsHtml = '';
+    for (let k = 0; k < K; k++) {
+        stepsHtml += `<h5>Menghitung F(${k}): \\( \\sum_{n=0}^{${K-1}} f(n) e^{-i2\\pi kn/K} \\)</h5>`;
+        let sum = new Complex(0, 0);
+        for (let n = 0; n < K; n++) {
+            const angle = -2 * Math.PI * k * n / K;
+            const twiddle = new Complex(Math.cos(angle), Math.sin(angle));
+            const term = vector[n].multiply(twiddle);
+            stepsHtml += `<p>n=${n}: (${vector[n].toString()}) * (${twiddle.toString()}) = ${term.toString()}</p>`;
+            sum = sum.add(term);
+        }
+        stepsHtml += `<p><b>Total F(${k}) = ${sum.toString()}</b></p>`;
+        result.push(sum);
+    }
+    return { result, stepsHtml };
+}
+// --- MODIFIKASI SELESAI DISINI ---
+
+colsDFT.addEventListener('change', setupGridsDFT);
+rowsDFT.addEventListener('change', setupGridsDFT);
+
+// --- LOGIKA IDFT 2D ---
+const colsIDFT = document.getElementById('cols-idft');
+const rowsIDFT = document.getElementById('rows-idft');
+const topGridIDFT = document.getElementById('top-array-idft');
+const bottomGridIDFT = document.getElementById('bottom-array-idft');
+
+function setupGridsIDFT() {
+    const M = parseInt(colsIDFT.value), N = parseInt(rowsIDFT.value);
+    createGrid(N, M, topGridIDFT, () => { const container = document.createElement('div'); container.className = 'complex-input-container'; container.innerHTML = `<div class="complex-input-row"><label>Re:</label><input type="number" value="0"></div><div class="complex-input-row"><label>Im:</label><input type="number" value="0"></div>`; return container; });
+    createGrid(N, M, bottomGridIDFT, () => { const box = document.createElement('div'); box.className = 'array-box'; return box; });
+}
+
+document.getElementById('process-btn-idft').addEventListener('click', () => {
+    const M = parseInt(colsIDFT.value), N = parseInt(rowsIDFT.value);
+    const inputDOM = topGridIDFT.childNodes, outputDOM = bottomGridIDFT.childNodes;
+    stepsContainer.innerHTML = '<h2>Perhitungan IDFT 2D</h2>';
+    let inputGrid = Array.from({ length: N }, (_, v) => Array.from({ length: M }, (_, u) => { const inputs = inputDOM[v * M + u].getElementsByTagName('input'); return new Complex(parseFloat(inputs[0].value) || 0, parseFloat(inputs[1].value) || 0); }));
+
+    stepsContainer.innerHTML += '<h3>Tahap 1: Menjalankan 1D IDFT pada setiap Baris</h3>';
+    let intermediateGrid = inputGrid.map((row, v) => {
+        const rowResult = idft1D(row);
+        stepsContainer.innerHTML += `<div class="step"><h4>Baris ${v}</h4>${rowResult.stepsHtml}</div>`;
+        return rowResult.result;
+    });
+    
+    stepsContainer.innerHTML += '<h3>Tahap 2: Menjalankan 1D IDFT pada setiap Kolom</h3>';
+    let finalGrid = Array.from({ length: N }, () => Array(M));
+    for (let x = 0; x < M; x++) {
+        let col = intermediateGrid.map(row => row[x]);
+        const colResult = idft1D(col);
+        stepsContainer.innerHTML += `<div class="step"><h4>Kolom ${x}</h4>${colResult.stepsHtml}</div>`;
+        colResult.result.forEach((value, y) => { finalGrid[y][x] = value; });
+    }
+
+    for (let y = 0; y < N; y++) { for (let x = 0; x < M; x++) { outputDOM[y * M + x].textContent = Math.round(finalGrid[y][x].real); } }
+    MathJax.typeset();
+});
+
+// --- MODIFIKASI DIMULAI DISINI ---
+function idft1D(vector) {
+    const K = vector.length;
+    let result = [];
+    let stepsHtml = '';
+    for (let n = 0; n < K; n++) {
+        stepsHtml += `<h5>Menghitung f(${n}): \\( \\frac{1}{${K}} \\sum_{k=0}^{${K-1}} F(k) e^{i2\\pi kn/K} \\)</h5>`;
+        let sum = new Complex(0, 0);
+        for (let k = 0; k < K; k++) {
+            const angle = 2 * Math.PI * k * n / K; // Tanda positif
+            const twiddle = new Complex(Math.cos(angle), Math.sin(angle));
+            const term = vector[k].multiply(twiddle);
+            stepsHtml += `<p>k=${k}: (${vector[k].toString()}) * (${twiddle.toString()}) = ${term.toString()}</p>`;
+            sum = sum.add(term);
+        }
+        const finalValue = sum.divide(K); // Dibagi panjang vektor
+        stepsHtml += `<p><b>Total Sum = ${sum.toString()}</b></p>`;
+        stepsHtml += `<p><b>Hasil f(${n}) = Total / ${K} = ${finalValue.toString()}</b></p>`;
+        result.push(finalValue);
+    }
+    return { result, stepsHtml };
+}
+// --- MODIFIKASI SELESAI DISINI ---
+
+colsIDFT.addEventListener('change', setupGridsIDFT);
+rowsIDFT.addEventListener('change', setupGridsIDFT);
+
+// --- INISIALISASI AWAL ---
+showPage('dft');
+setupGridsDFT();
+setupGridsIDFT();
+
+</script>
+</body>
+</html>

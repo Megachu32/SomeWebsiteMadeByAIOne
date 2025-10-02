@@ -1,395 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aplikasi Web Interaktif dengan Sejarah</title>
-<style>
-  body {
-    font-family: sans-serif;
-    margin: 0;
-    padding: 0;
-    font-size: 14px;
-  }
-  .container {
-    display: flex;
-    width: 100vw;
-    height: 100vh;
-  }
-  .left-panel {
-    flex: 1.5;
-    padding: 20px;
-    border-right: 1px solid #ccc;
-    overflow: auto;
-  }
-  .right-panel {
-    flex: 1;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-  }
-  .left-panel h2, .right-panel h2 {
-    margin-top: 0;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Portfolio</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-  /* Styling untuk Tabel Utama dan Sejarah */
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 15px;
-  }
-  th, td {
-    border: 1px solid black;
-    text-align: center;
-    padding: 10px;
-    min-width: 40px;
-  }
-  .main-matrix td { /* Sel matriks utama bisa diklik */
-    cursor: pointer;
-  }
-  .main-matrix td:hover {
-    background-color: #f2f2f2;
-  }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 40px;
+            color: #ffffff;
+        }
 
-  /* Kontrol di Panel Kanan */
-  .controls > div {
-    margin-bottom: 20px;
-  }
-  label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-  }
-  select, button {
-    width: 100%;
-    padding: 10px;
-    font-size: 1em;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    box-sizing: border-box;
-  }
-  button {
-    cursor: pointer;
-    background-color: #007bff;
-    color: white;
-    border: none;
-  }
-  button:hover {
-    opacity: 0.9;
-  }
+        #portfolio-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px; /* The space between cards */
+            justify-content: center;
+            max-width: 1200px;
+        }
 
-  /* Navigasi Halaman */
-  .nav-buttons {
-    display: flex;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #ccc;
-  }
-  .nav-buttons button {
-    flex: 1;
-    background-color: #f1f1f1;
-    color: black;
-    border: 1px solid #ccc;
-    border-bottom: none;
-    border-radius: 5px 5px 0 0;
-    padding: 10px;
-  }
-  .nav-buttons button.active {
-    background-color: #007bff;
-    color: white;
-    border-color: #007bff;
-  }
+        .card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            width: 250px;
+            height: 150px;
+            text-decoration: none;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
 
-  /* Konten Halaman */
-  .page-content {
-    display: none; /* Sembunyikan semua halaman secara default */
-    flex-grow: 1;
-  }
-  .page-content.active {
-    display: block; /* Tampilkan hanya halaman yang aktif */
-  }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.3);
+            border-color: #555;
+        }
 
-  #page2 {
-    overflow-y: auto; /* Tambahkan scroll jika sejarahnya panjang */
-  }
-  
-  #history-content h3 {
-      margin-top: 25px;
-      margin-bottom: 5px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 5px;
-  }
-</style>
+        .card h2 {
+            font-size: 1.5em;
+            margin: 0;
+        }
+    </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="left-panel">
-    <h2>Matriks 7x7 Interaktif</h2>
-    <p>Klik pada sel (bukan tepi) untuk menerapkan filter yang dipilih.</p>
-    <table id="matrix-table" class="main-matrix"></table>
-  </div>
-  <div class="right-panel">
-    <div class="nav-buttons">
-      <button id="btn-page1" class="active">Pengaturan Filter</button>
-      <button id="btn-page2">Sejarah Matriks</button>
-    </div>
+    <h1>My Work Portfolio</h1>
 
-    <!-- Halaman 1: Pengaturan Filter -->
-    <div id="page1" class="page-content active">
-      <h2>Menu Kontrol</h2>
-      <div class="controls">
-        <div>
-          <label for="filter-select">Pilih Filter:</label>
-          <select id="filter-select">
-            <option value="lowpass">Lowpass (Blur)</option>
-            <option value="highpass">Highpass (Sharpen)</option>
-            <option value="highboost">Highboost (Extra Sharpen)</option>
-            <option value="median">Median</option>
-            <option value="prewitt">Prewitt (Edge Detection)</option>
-            <option value="sobel">Sobel (Edge Detection)</option>
-          </select>
+    <div id="portfolio-container">
         </div>
-        <div>
-          <button id="apply-filter-btn">Aplikasikan Filter (Seluruh Matriks)</button>
-        </div>
-        <div>
-          <button id="randomize-btn" style="background-color: #28a745;">Randomize Matriks</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Halaman 2: Sejarah Matriks -->
-    <div id="page2" class="page-content">
-      <h2>Sejarah Perubahan</h2>
-      <div id="history-content">
-        <p>Sejarah matriks akan ditampilkan di sini.</p>
-      </div>
-    </div>
-  </div>
-</div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- IMPORTANT ---
+            // This is the list of your project folders.
+            // When you add a new folder like "work4", just add it to this list.
+            const projectFolders = ['work1', 'work2', 'work3'];
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // Referensi elemen DOM
-  const table = document.getElementById('matrix-table');
-  const randomizeBtn = document.getElementById('randomize-btn');
-  const applyFilterBtn = document.getElementById('apply-filter-btn');
-  const filterSelect = document.getElementById('filter-select');
-  const historyContainer = document.getElementById('history-content');
-  
-  const btnPage1 = document.getElementById('btn-page1');
-  const btnPage2 = document.getElementById('btn-page2');
-  const page1 = document.getElementById('page1');
-  const page2 = document.getElementById('page2');
+            const container = document.getElementById('portfolio-container');
 
-  const matrixSize = 7;
-  let matrixHistory = []; // Array untuk menyimpan sejarah matriks
+            // Loop through each folder name in the list
+            projectFolders.forEach(folderName => {
+                // 1. Create the link element (the card itself)
+                const cardLink = document.createElement('a');
+                cardLink.className = 'card';
+                cardLink.href = `./${folderName}/index.html`; // Sets the link to the correct path
 
-  // --- LOGIKA NAVIGASI HALAMAN ---
-  function showPage(pageNumber) {
-    if (pageNumber === 1) {
-      page1.classList.add('active');
-      page2.classList.remove('active');
-      btnPage1.classList.add('active');
-      btnPage2.classList.remove('active');
-    } else {
-      page2.classList.add('active');
-      page1.classList.remove('active');
-      btnPage2.classList.add('active');
-      btnPage1.classList.remove('active');
-    }
-  }
+                // 2. Create the title element inside the card
+                const cardTitle = document.createElement('h2');
+                
+                // Format the text for display (e.g., "work1" becomes "Work 1")
+                const displayName = folderName.charAt(0).toUpperCase() + folderName.slice(1, 4) + ' ' + folderName.slice(4);
+                cardTitle.textContent = displayName;
 
-  btnPage1.addEventListener('click', () => showPage(1));
-  btnPage2.addEventListener('click', () => showPage(2));
+                // 3. Put the title inside the card link
+                cardLink.appendChild(cardTitle);
 
-  // --- LOGIKA SEJARAH MATRIKS ---
-  function saveHistory(matrix) {
-    matrixHistory.push(JSON.parse(JSON.stringify(matrix)));
-    renderHistory();
-  }
-
-  function renderHistory() {
-    historyContainer.innerHTML = '';
-    if (matrixHistory.length === 0) {
-      historyContainer.innerHTML = '<p>Sejarah matriks kosong. Tekan "Randomize" untuk memulai.</p>';
-      return;
-    }
-    
-    matrixHistory.forEach((matrix, index) => {
-      const stepTitle = document.createElement('h3');
-      stepTitle.textContent = `Langkah ke-${index} ${index === 0 ? '(Matriks Awal)' : ''}`;
-      
-      const historyTable = document.createElement('table');
-      for(let i = 0; i < matrix.length; i++) {
-        const row = historyTable.insertRow();
-        for(let j = 0; j < matrix[i].length; j++) {
-          const cell = row.insertCell();
-          cell.textContent = matrix[i][j];
-        }
-      }
-      historyContainer.appendChild(stepTitle);
-      historyContainer.appendChild(historyTable);
-    });
-  }
-
-  // --- LOGIKA MATRIKS UTAMA ---
-  function getRandomValue() {
-    return Math.floor(Math.random() * 256);
-  }
-
-  function createMatrix() {
-    table.innerHTML = '';
-    for (let i = 0; i < matrixSize; i++) {
-      const row = table.insertRow();
-      for (let j = 0; j < matrixSize; j++) {
-        const cell = row.insertCell();
-        cell.textContent = getRandomValue();
-        
-        // ======================= PERUBAHAN UTAMA DI SINI =======================
-        // Mengganti event listener klik pada setiap sel
-        cell.addEventListener('click', function() {
-          // 1. Cek apakah sel berada di tepi. Jika ya, hentikan proses.
-          if (i === 0 || i === matrixSize - 1 || j === 0 || j === matrixSize - 1) {
-            alert("Filter tidak bisa diterapkan pada sel di tepi matriks.");
-            return;
-          }
-
-          // 2. Baca keadaan matriks saat ini dari DOM
-          const currentMatrix = readMatrixFromDOM();
-          const filterType = filterSelect.value;
-          
-          // 3. Ambil matriks 3x3 di sekitar sel yang diklik
-          const n = [
-            [currentMatrix[i-1][j-1], currentMatrix[i-1][j], currentMatrix[i-1][j+1]],
-            [currentMatrix[i][j-1],   currentMatrix[i][j],   currentMatrix[i][j+1]],
-            [currentMatrix[i+1][j-1], currentMatrix[i+1][j], currentMatrix[i+1][j+1]]
-          ];
-
-          // 4. Hitung nilai baru berdasarkan filter yang dipilih
-          let newValue = 0;
-          const flatN = n.flat();
-          switch(filterType) {
-            case 'lowpass':
-              newValue = flatN.reduce((a, b) => a + b, 0) / 9;
-              break;
-            case 'highpass':
-              newValue = (n[1][1] * 9) - flatN.reduce((a, b) => a + b, 0);
-              break;
-            case 'highboost':
-              const highpassValue = (n[1][1] * 9) - flatN.reduce((a, b) => a + b, 0);
-              newValue = n[1][1] + highpassValue;
-              break;
-            case 'median':
-              newValue = flatN.sort((a, b) => a - b)[4];
-              break;
-            case 'prewitt':
-              const prewittGx = (n[0][2] + n[1][2] + n[2][2]) - (n[0][0] + n[1][0] + n[2][0]);
-              const prewittGy = (n[2][0] + n[2][1] + n[2][2]) - (n[0][0] + n[0][1] + n[0][2]);
-              newValue = Math.abs(prewittGx) + Math.abs(prewittGy);
-              break;
-            case 'sobel':
-              const sobelGx = (n[0][2] + 2*n[1][2] + n[2][2]) - (n[0][0] + 2*n[1][0] + n[2][0]);
-              const sobelGy = (n[2][0] + 2*n[2][1] + n[2][2]) - (n[0][0] + 2*n[0][1] + n[0][2]);
-              newValue = Math.abs(sobelGx) + Math.abs(sobelGy);
-              break;
-          }
-          
-          // 5. Jaga nilai agar tetap dalam rentang 0-255 dan perbarui sel
-          this.textContent = clamp(newValue);
-          
-          // 6. Simpan seluruh keadaan matriks yang baru ke dalam sejarah
-          saveHistory(readMatrixFromDOM());
+                // 4. Add the completed card to the container on the page
+                container.appendChild(cardLink);
+            });
         });
-        // ======================= AKHIR DARI PERUBAHAN ==========================
-      }
-    }
-    // Simpan keadaan awal matriks ke sejarah
-    saveHistory(readMatrixFromDOM());
-  }
-  
-  function handleRandomizeClick() {
-    matrixHistory = [];
-    createMatrix();
-  }
-
-  function readMatrixFromDOM() {
-    const matrix = [];
-    for (let row of table.rows) {
-      const rowData = Array.from(row.cells).map(cell => parseInt(cell.textContent));
-      matrix.push(rowData);
-    }
-    return matrix;
-  }
-
-  function updateDOMFromMatrix(matrix) {
-     for (let i = 0; i < matrix.length; i++) {
-       for (let j = 0; j < matrix[i].length; j++) {
-         table.rows[i].cells[j].textContent = matrix[i][j];
-       }
-     }
-  }
-
-  function clamp(value) {
-    return Math.max(0, Math.min(255, Math.round(value)));
-  }
-
-  function applyFilter() {
-    const matrix = readMatrixFromDOM();
-    const newMatrix = JSON.parse(JSON.stringify(matrix));
-    const filterType = filterSelect.value;
-    
-    for (let i = 1; i < matrixSize - 1; i++) {
-      for (let j = 1; j < matrixSize - 1; j++) {
-        const n = [
-          [matrix[i-1][j-1], matrix[i-1][j], matrix[i-1][j+1]],
-          [matrix[i][j-1],   matrix[i][j],   matrix[i][j+1]],
-          [matrix[i+1][j-1], matrix[i+1][j], matrix[i+1][j+1]]
-        ];
-        
-        let newValue = 0;
-        const flatN = n.flat();
-        switch(filterType) {
-          case 'lowpass':
-            newValue = flatN.reduce((a, b) => a + b, 0) / 9;
-            break;
-          case 'highpass':
-            newValue = (n[1][1] * 9) - flatN.reduce((a, b) => a + b, 0);
-            break;
-          case 'highboost':
-            const highpassValue = (n[1][1] * 9) - flatN.reduce((a, b) => a + b, 0);
-            newValue = n[1][1] + highpassValue;
-            break;
-          case 'median':
-            newValue = flatN.sort((a, b) => a - b)[4];
-            break;
-          case 'prewitt':
-            const prewittGx = (n[0][2] + n[1][2] + n[2][2]) - (n[0][0] + n[1][0] + n[2][0]);
-            const prewittGy = (n[2][0] + n[2][1] + n[2][2]) - (n[0][0] + n[0][1] + n[0][2]);
-            newValue = Math.abs(prewittGx) + Math.abs(prewittGy);
-            break;
-          case 'sobel':
-            const sobelGx = (n[0][2] + 2*n[1][2] + n[2][2]) - (n[0][0] + 2*n[1][0] + n[2][0]);
-            const sobelGy = (n[2][0] + 2*n[2][1] + n[2][2]) - (n[0][0] + 2*n[0][1] + n[0][2]);
-            newValue = Math.abs(sobelGx) + Math.abs(sobelGy);
-            break;
-        }
-        newMatrix[i][j] = clamp(newValue);
-      }
-    }
-    updateDOMFromMatrix(newMatrix);
-    saveHistory(newMatrix);
-  }
-
-  // --- EVENT LISTENERS ---
-  randomizeBtn.addEventListener('click', handleRandomizeClick);
-  applyFilterBtn.addEventListener('click', applyFilter);
-
-  // Inisialisasi aplikasi
-  handleRandomizeClick();
-  showPage(1);
-});
-</script>
+    </script>
 
 </body>
 </html>
