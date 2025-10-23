@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Transformasi Geometrik</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            background-color: #f4f4f9;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            color: #0056b3;
+        }
+        .point-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .point-group {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .point-group h3 {
+            margin-top: 0;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #calculation-steps, #final-result {
+            background: #fdfdfd;
+            border: 1px solid #eee;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        #calculation-steps pre {
+            font-family: 'Caveat', cursive;
+            font-size: 1.5em; /* Larger font size for handwriting style */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #444;
+        }
+        #final-result {
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #d9534f;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Kalkulator Transformasi Geometrik</h1>
+        <p>Masukkan 4 titik sumber (a, b, c, d), 4 titik tujuan (f, g, h, i), dan 1 titik (e) yang akan ditransformasi. Gunakan format "x, y".</p>
+
+        <div class="point-grid">
+            <div class="point-group">
+                <h3>Titik Sumber (Awal)</h3>
+                <label for="pointA">Titik a:</label>
+                <input type="text" id="pointA" value="0, 0">
+                <label for="pointB">Titik b:</label>
+                <input type="text" id="pointB" value="1000, 0">
+                <label for="pointC">Titik c:</label>
+                <input type="text" id="pointC" value="1000, 700">
+                <label for="pointD">Titik d:</label>
+                <input type="text" id="pointD" value="0, 700">
+            </div>
+            <div class="point-group">
+                <h3>Titik Tujuan (Akhir)</h3>
+                <label for="pointF">Titik f (tujuan a):</label>
+                <input type="text" id="pointF" value="200, 200">
+                <label for="pointG">Titik g (tujuan b):</label>
+                <input type="text" id="pointG" value="2000, 500">
+                <label for="pointH">Titik h (tujuan c):</label>
+                <input type="text" id="pointH" value="1500, 1500">
+                <label for="pointI">Titik i (tujuan d):</label>
+                <input type="text" id="pointI" value="100, 1000">
+            </div>
+             <div class="point-group">
+                <h3>Titik untuk Ditransformasi</h3>
+                <label for="pointE">Titik e:</label>
+                <input type="text" id="pointE" value="800, 300">
+            </div>
+        </div>
+
+        <button onclick="calculateTransform()">Hitung Transformasi</button>
+
+        <div id="calculation-steps">
+            <h2>Langkah-langkah Perhitungan</h2>
+            <pre>Hasil perhitungan akan muncul di sini...</pre>
+        </div>
+
+        <div id="final-result">
+            <p>Posisi akhir titik e akan muncul di sini.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Fungsi Bantuan untuk Matematika Matriks ---
+
+        // Fungsi untuk menghitung invers matriks 4x4
+        function invertMatrix(M) {
+            // Implementasi lengkap dari invers matriks 4x4
+            // (terlalu panjang untuk dijelaskan baris per baris, tapi ini adalah implementasi standar)
+            let inv = new Array(4).fill(0).map(() => new Array(4).fill(0));
+            let m = M.flat();
+            inv[0][0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+            inv[1][0] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+            inv[2][0] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+            inv[3][0] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+            inv[0][1] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+            inv[1][1] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+            inv[2][1] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+            inv[3][1] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+            inv[0][2] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+            inv[1][2] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+            inv[2][2] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+            inv[3][2] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+            inv[0][3] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+            inv[1][3] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+            inv[2][3] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+            inv[3][3] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+
+            let det = m[0] * inv[0][0] + m[1] * inv[0][1] + m[2] * inv[0][2] + m[3] * inv[0][3];
+            if (det === 0) return null; // Matriks tidak dapat diinvers
+
+            det = 1.0 / det;
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    inv[i][j] *= det;
+                }
+            }
+            return inv;
+        }
+
+        // Fungsi untuk mengalikan matriks 4x4 dengan vektor 4x1
+        function multiplyMatrixVector(matrix, vector) {
+            let result = [0, 0, 0, 0];
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    result[i] += matrix[i][j] * vector[j];
+                }
+            }
+            return result;
+        }
+
+        // --- Fungsi Utama ---
+
+        function calculateTransform() {
+            const stepsEl = document.querySelector("#calculation-steps pre");
+            const resultEl = document.querySelector("#final-result p");
+            let steps = "";
+
+            // 1. Membaca dan mem-parsing semua input
+            function parsePoint(id) {
+                const val = document.getElementById(id).value.split(',').map(s => parseFloat(s.trim()));
+                return { x: val[0], y: val[1] };
+            }
+
+            try {
+                const a = parsePoint('pointA'), b = parsePoint('pointB'), c = parsePoint('pointC'), d = parsePoint('pointD');
+                const f = parsePoint('pointF'), g = parsePoint('pointG'), h = parsePoint('pointH'), i = parsePoint('pointI');
+                const e = parsePoint('pointE');
+                const srcPoints = [a, b, c, d];
+                
+                steps += "== Mencari Koefisien Transformasi ==\n\n";
+                steps += "Model transformasi yang digunakan:\n";
+                steps += "x' = C1*x + C2*y + C3*xy + C4\n";
+                steps += "y' = C5*x + C6*y + C7*xy + C8\n\n";
+
+                // 2. Menyusun matriks M dari titik sumber
+                const M = srcPoints.map(p => [p.x, p.y, p.x * p.y, 1]);
+
+                steps += "Langkah 1: Menyusun matriks M dari titik sumber (a,b,c,d)\n";
+                steps += "Setiap baris adalah [x, y, x*y, 1]\n";
+                steps += `M = [\n`;
+                M.forEach(row => steps += `     [${row.join(', ')}]\n`);
+                steps += `    ]\n\n`;
+
+                // 3. Menghitung invers dari matriks M
+                const M_inv = invertMatrix(M);
+                if (!M_inv) {
+                    stepsEl.textContent = "Error: Titik sumber tidak valid (mungkin segaris) dan tidak bisa di-invers.";
+                    return;
+                }
+                
+                steps += "Langkah 2: Menghitung invers dari matriks M (M^-1)\n";
+                steps += `M^-1 = [\n`;
+                M_inv.forEach(row => steps += `        [${row.map(n => n.toFixed(6)).join(', ')}]\n`);
+                steps += `       ]\n\n`;
+
+                // 4. Menyelesaikan untuk koefisien C1-C4 (untuk x')
+                const Vx = [f.x, g.x, h.x, i.x];
+                const Cx = multiplyMatrixVector(M_inv, Vx);
+                const [c1, c2, c3, c4] = Cx;
+
+                steps += "Langkah 3: Menyelesaikan koefisien untuk x' (C1, C2, C3, C4)\n";
+                steps += "Kita selesaikan C_x = M^-1 * V_x, dimana V_x adalah [f.x, g.x, h.x, i.x]\n";
+                steps += `V_x = [${Vx.join(', ')}]\n`;
+                steps += `C1 = ${c1.toFixed(6)}\nC2 = ${c2.toFixed(6)}\nC3 = ${c3.toFixed(6)}\nC4 = ${c4.toFixed(6)}\n\n`;
+                
+                // 5. Menyelesaikan untuk koefisien C5-C8 (untuk y')
+                const Vy = [f.y, g.y, h.y, i.y];
+                const Cy = multiplyMatrixVector(M_inv, Vy);
+                const [c5, c6, c7, c8] = Cy;
+
+                steps += "Langkah 4: Menyelesaikan koefisien untuk y' (C5, C6, C7, C8)\n";
+                steps += "Kita selesaikan C_y = M^-1 * V_y, dimana V_y adalah [f.y, g.y, h.y, i.y]\n";
+                steps += `V_y = [${Vy.join(', ')}]\n`;
+                steps += `C5 = ${c5.toFixed(6)}\nC6 = ${c6.toFixed(6)}\nC7 = ${c7.toFixed(6)}\nC8 = ${c8.toFixed(6)}\n\n`;
+
+                // 6. Menghitung posisi akhir titik e
+                steps += "== Menghitung Posisi Akhir Titik e ==\n\n";
+                steps += `Titik e = (${e.x}, ${e.y})\n\n`;
+
+                const ex_final = c1 * e.x + c2 * e.y + c3 * e.x * e.y + c4;
+                steps += `x_final = C1*e.x + C2*e.y + C3*e.x*e.y + C4\n`;
+                steps += `x_final = (${c1.toFixed(4)} * ${e.x}) + (${c2.toFixed(4)} * ${e.y}) + (${c3.toFixed(4)} * ${e.x}*${e.y}) + ${c4.toFixed(4)}\n`;
+                steps += `x_final = ${ex_final.toFixed(4)}\n\n`;
+
+                const ey_final = c5 * e.x + c6 * e.y + c7 * e.x * e.y + c8;
+                steps += `y_final = C5*e.x + C6*e.y + C7*e.x*e.y + C8\n`;
+                steps += `y_final = (${c5.toFixed(4)} * ${e.x}) + (${c6.toFixed(4)} * ${e.y}) + (${c7.toFixed(4)} * ${e.x}*${e.y}) + ${c8.toFixed(4)}\n`;
+                steps += `y_final = ${ey_final.toFixed(4)}\n\n`;
+
+                // 7. Menampilkan hasil
+                stepsEl.textContent = steps;
+                resultEl.textContent = `Posisi akhir titik e adalah: (${ex_final.toFixed(3)}, ${ey_final.toFixed(3)})`;
+
+            } catch (error) {
+                stepsEl.textContent = "Terjadi kesalahan. Pastikan semua input diisi dengan format 'x, y' yang benar.";
+                console.error(error);
+            }
+        }
+        
+        // Menjalankan kalkulasi saat halaman pertama kali dimuat
+        window.onload = calculateTransform;
+    </script>
+</body>
+</html>

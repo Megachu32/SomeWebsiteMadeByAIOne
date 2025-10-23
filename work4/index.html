@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penyelesai Persamaan x,y,z</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .input-section, .solution-section {
+            margin-bottom: 20px;
+        }
+        h2 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #solution {
+            white-space: pre-wrap;
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Bagian 1: Input Persamaan -->
+        <div class="input-section">
+            <h2>persamaan x,y,z</h2>
+            <p>Masukkan koefisien untuk x, y, z, dan hasilnya (dipisahkan oleh spasi).</p>
+            <p>Contoh: untuk persamaan <strong>2x + 3y - z = 15</strong>, masukkan <strong>2 3 -1 15</strong>.</p>
+            <input type="text" id="eq1" placeholder="Koefisien Persamaan 1 (contoh: 1 1 1 7)">
+            <input type="text" id="eq2" placeholder="Koefisien Persamaan 2 (contoh: 1 2 3 15)">
+            <input type="text" id="eq3" placeholder="Koefisien Persamaan 3 (contoh: 2 1 1 3)">
+            <button onclick="solve()">Selesaikan</button>
+        </div>
+
+        <!-- Bagian 2: Cara Menyelesaikan -->
+        <div class="solution-section">
+            <h2>cara menyelesaikan</h2>
+            <pre id="solution">Langkah-langkah penyelesaian akan ditampilkan di sini.</pre>
+        </div>
+    </div>
+
+    <script>
+        function solve() {
+            // Mengambil input dari textbox
+            const eq1Str = document.getElementById('eq1').value;
+            const eq2Str = document.getElementById('eq2').value;
+            const eq3Str = document.getElementById('eq3').value;
+
+            // Mem-parsing string input menjadi array angka
+            const eq1 = eq1Str.split(' ').map(Number);
+            const eq2 = eq2Str.split(' ').map(Number);
+            const eq3 = eq3Str.split(' ').map(Number);
+
+            const solutionDiv = document.getElementById('solution');
+            let solutionSteps = "";
+
+            if (eq1.length !== 4 || eq2.length !== 4 || eq3.length !== 4) {
+                solutionDiv.textContent = "Error: Setiap baris harus memiliki tepat 4 nilai (koefisien x, y, z, dan hasil).";
+                return;
+            }
+
+            // Menampilkan persamaan awal
+            solutionSteps += "Persamaan Awal:\n";
+            solutionSteps += `(1) ${eq1[0]}x + ${eq1[1]}y + ${eq1[2]}z = ${eq1[3]}\n`;
+            solutionSteps += `(2) ${eq2[0]}x + ${eq2[1]}y + ${eq2[2]}z = ${eq2[3]}\n`;
+            solutionSteps += `(3) ${eq3[0]}x + ${eq3[1]}y + ${eq3[2]}z = ${eq3[3]}\n\n`;
+
+            // Langkah 1: Eliminasi x dari persamaan (1) dan (2)
+            solutionSteps += "Langkah 1: Eliminasi variabel x dari persamaan (1) dan (2)\n";
+            let newEq1 = eq1.map(val => val * eq2[0]);
+            let newEq2 = eq2.map(val => val * eq1[0]);
+            solutionSteps += `(1) * ${eq2[0]} -> ${newEq1[0]}x + ${newEq1[1]}y + ${newEq1[2]}z = ${newEq1[3]}\n`;
+            solutionSteps += `(2) * ${eq1[0]} -> ${newEq2[0]}x + ${newEq2[1]}y + ${newEq2[2]}z = ${newEq2[3]}\n`;
+            solutionSteps += "-------------------------------------------------- -\n";
+            let eq4 = newEq1.map((val, i) => val - newEq2[i]);
+            solutionSteps += `(4) ${eq4[1]}y + ${eq4[2]}z = ${eq4[3]}\n\n`;
+
+            // Langkah 2: Eliminasi x dari persamaan (1) dan (3)
+            solutionSteps += "Langkah 2: Eliminasi variabel x dari persamaan (1) dan (3)\n";
+            newEq1 = eq1.map(val => val * eq3[0]);
+            let newEq3 = eq3.map(val => val * eq1[0]);
+            solutionSteps += `(1) * ${eq3[0]} -> ${newEq1[0]}x + ${newEq1[1]}y + ${newEq1[2]}z = ${newEq1[3]}\n`;
+            solutionSteps += `(3) * ${eq1[0]} -> ${newEq3[0]}x + ${newEq3[1]}y + ${newEq3[2]}z = ${newEq3[3]}\n`;
+            solutionSteps += "-------------------------------------------------- -\n";
+            let eq5 = newEq1.map((val, i) => val - newEq3[i]);
+            solutionSteps += `(5) ${eq5[1]}y + ${eq5[2]}z = ${eq5[3]}\n\n`;
+
+            // Langkah 3: Eliminasi y dari persamaan (4) dan (5) untuk menemukan z
+            solutionSteps += "Langkah 3: Eliminasi y dari persamaan (4) dan (5) untuk menemukan z\n";
+            let newEq4 = eq4.map(val => val * eq5[1]);
+            let newEq5 = eq5.map(val => val * eq4[1]);
+            solutionSteps += `(4) * ${eq5[1]} -> ${newEq4[1]}y + ${newEq4[2]}z = ${newEq4[3]}\n`;
+            solutionSteps += `(5) * ${eq4[1]} -> ${newEq5[1]}y + ${newEq5[2]}z = ${newEq5[3]}\n`;
+            solutionSteps += "-------------------------------------------------- -\n";
+            let zResult = newEq4.map((val, i) => val - newEq5[i]);
+            let z = zResult[3] / zResult[2];
+            solutionSteps += `${zResult[2]}z = ${zResult[3]}\n`;
+            solutionSteps += `z = ${zResult[3]} / ${zResult[2]} -> z = ${z}\n\n`;
+            
+            // Langkah 4: Substitusi nilai z ke persamaan (4) untuk menemukan y
+            solutionSteps += "Langkah 4: Substitusi nilai z ke persamaan (4) untuk menemukan y\n";
+            solutionSteps += `${eq4[1]}y + ${eq4[2]}(${z}) = ${eq4[3]}\n`;
+            solutionSteps += `${eq4[1]}y + ${eq4[2] * z} = ${eq4[3]}\n`;
+            solutionSteps += `${eq4[1]}y = ${eq4[3]} - ${eq4[2] * z}\n`;
+            solutionSteps += `${eq4[1]}y = ${eq4[3] - (eq4[2] * z)}\n`;
+            let y = (eq4[3] - (eq4[2] * z)) / eq4[1];
+            solutionSteps += `y = ${y}\n\n`;
+
+            // Langkah 5: Substitusi nilai y dan z ke persamaan (1) untuk menemukan x
+            solutionSteps += "Langkah 5: Substitusi nilai y dan z ke persamaan (1) untuk menemukan x\n";
+            solutionSteps += `${eq1[0]}x + ${eq1[1]}(${y}) + ${eq1[2]}(${z}) = ${eq1[3]}\n`;
+            solutionSteps += `${eq1[0]}x + ${eq1[1] * y} + ${eq1[2] * z} = ${eq1[3]}\n`;
+            solutionSteps += `${eq1[0]}x = ${eq1[3]} - ${eq1[1] * y} - ${eq1[2] * z}\n`;
+            let x = (eq1[3] - (eq1[1] * y) - (eq1[2] * z)) / eq1[0];
+            solutionSteps += `x = ${x}\n\n`;
+
+            // Menampilkan hasil akhir
+            solutionSteps += "==================== HASIL AKHIR ====================\n";
+            solutionSteps += `Nilai dari x adalah: ${x}\n`;
+            solutionSteps += `Nilai dari y adalah: ${y}\n`;
+            solutionSteps += `Nilai dari z adalah: ${z}\n`;
+
+            solutionDiv.textContent = solutionSteps;
+        }
+    </script>
+
+</body>
+</html>
