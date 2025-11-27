@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rubik's Clock Simulator</title>
+    <title>Rubik's Clock Simulator (Fixed Logic)</title>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         :root {
@@ -26,32 +26,29 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            user-select: none; /* Mencegah seleksi teks saat klik cepat */
+            user-select: none;
         }
 
         /* --- DISPLAY BOX --- */
         .display-box {
             position: relative;
             background-color: #fff;
-            padding: 60px; /* Padding lebih besar untuk tombol sudut */
+            padding: 70px;
             border-radius: 20px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.1);
             margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
         }
 
         .swap-btn {
             position: absolute;
-            top: 10px;
-            right: 50%;
-            transform: translateX(50%);
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
             background-color: #333;
             color: white;
             border: none;
             border-radius: 20px;
-            padding: 8px 16px;
+            padding: 8px 20px;
             cursor: pointer;
             font-weight: bold;
             z-index: 20;
@@ -68,6 +65,7 @@
             position: relative;
             padding: 15px;
             box-shadow: inset 0 0 25px rgba(0,0,0,0.15), 0 10px 20px rgba(0,0,0,0.15);
+            transition: transform 0.4s ease-in-out; /* Animasi Flip Halus */
         }
 
         .clock-grid {
@@ -90,137 +88,81 @@
             box-sizing: border-box;
         }
 
-        /* Indikator Jam 12 */
         .clock-face::after {
-            content: '';
-            position: absolute;
+            content: ''; position: absolute;
             top: 4px; left: 50%; transform: translateX(-50%);
-            width: 5px; height: 5px;
-            background-color: #999; border-radius: 50%;
+            width: 5px; height: 5px; background-color: #999; border-radius: 50%;
         }
 
         .hand {
-            position: absolute;
-            bottom: 50%; left: 50%;
+            position: absolute; bottom: 50%; left: 50%;
             width: 6px; height: 30px;
             background-color: var(--hand-color);
             transform-origin: bottom center;
             border-radius: 3px;
-            transition: transform 0.2s cubic-bezier(0.4, 2.5, 0.4, 0.8); /* Efek membal */
+            transition: transform 0.2s cubic-bezier(0.4, 2.0, 0.4, 0.8);
             z-index: 1;
         }
         .hand::before {
-            content: '';
-            position: absolute;
-            bottom: -5px; left: -5px;
-            width: 16px; height: 16px;
-            background-color: var(--hand-color);
-            border-radius: 50%;
+            content: ''; position: absolute; bottom: -5px; left: -5px;
+            width: 16px; height: 16px; background-color: var(--hand-color); border-radius: 50%;
         }
 
         /* PINS */
         .pin {
-            position: absolute;
-            width: 24px; height: 24px;
-            border-radius: 50%;
-            border: 2px solid rgba(0,0,0,0.3);
-            cursor: pointer;
-            transition: all 0.2s;
-            z-index: 10;
+            position: absolute; width: 24px; height: 24px;
+            border-radius: 50%; border: 2px solid rgba(0,0,0,0.3);
+            cursor: pointer; transition: all 0.2s; z-index: 10;
         }
-        .pin:hover { filter: brightness(1.1); }
-        
+        .pin:hover { transform: scale(1.1); }
         .pin.top-left { top: 92px; left: 92px; }
         .pin.top-right { top: 92px; right: 92px; }
         .pin.bottom-left { bottom: 92px; left: 92px; }
         .pin.bottom-right { bottom: 92px; right: 92px; }
 
-        /* --- INTERACTION WHEELS (CORNER BUTTONS) --- */
+        /* --- WHEELS (CORNER BUTTONS) --- */
         .wheel-control {
-            position: absolute;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            z-index: 15;
+            position: absolute; display: flex; flex-direction: column; gap: 5px; z-index: 15;
         }
-        
-        /* Posisi Controller di sudut Display Box */
         .ctrl-tl { top: 15px; left: 15px; }
         .ctrl-tr { top: 15px; right: 15px; }
         .ctrl-bl { bottom: 15px; left: 15px; }
         .ctrl-br { bottom: 15px; right: 15px; }
 
         .wheel-btn {
-            width: 40px; height: 40px;
-            border-radius: 50%;
-            border: 1px solid #ccc;
-            background-color: var(--btn-wheel);
-            color: #333;
-            font-size: 1.2rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 1px solid #ccc; background-color: var(--btn-wheel);
+            color: #333; font-size: 1.2rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.1s, background 0.2s;
         }
-        .wheel-btn:active { transform: scale(0.9); background-color: #ddd; }
+        .wheel-btn:active { background-color: #ddd; transform: scale(0.95); }
         .wheel-btn:hover { background-color: var(--btn-hover); }
 
-        /* Label kecil untuk roda */
         .wheel-label {
-            position: absolute;
-            font-size: 0.7rem;
-            font-weight: bold;
-            color: #888;
-            width: 100%;
-            text-align: center;
+            position: absolute; font-size: 0.7rem; font-weight: bold; color: #888;
+            width: 100%; text-align: center; pointer-events: none;
         }
-        /* Mengatur posisi label agar tidak menumpuk tombol */
-        .ctrl-tl .wheel-label { top: -15px; } 
-        .ctrl-tr .wheel-label { top: -15px; }
-        .ctrl-bl .wheel-label { bottom: -15px; }
-        .ctrl-br .wheel-label { bottom: -15px; }
+        .ctrl-tl .wheel-label, .ctrl-tr .wheel-label { top: -18px; }
+        .ctrl-bl .wheel-label, .ctrl-br .wheel-label { bottom: -18px; }
 
-
-        /* --- PANEL --- */
+        /* PANEL */
         .panel {
-            background-color: white;
-            padding: 20px;
-            border-radius: 12px;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: center;
-            max-width: 600px;
+            background-color: white; padding: 20px; border-radius: 12px;
+            display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 600px;
         }
-
         .btn-action {
-            border: none;
-            padding: 10px 20px;
-            font-size: 0.95rem;
-            border-radius: 8px;
-            cursor: pointer;
-            color: white;
-            font-weight: 600;
-            transition: opacity 0.2s;
+            border: none; padding: 10px 20px; font-size: 0.95rem;
+            border-radius: 8px; cursor: pointer; color: white; font-weight: 600;
         }
-        .btn-action:hover { opacity: 0.9; }
-        
         .btn-random { background-color: #9c27b0; }
         .btn-reset { background-color: #f44336; }
         .btn-download { background-color: #2196F3; }
 
         .side-indicator {
-            position: absolute;
-            bottom: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-            color: #555;
-            letter-spacing: 2px;
+            position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%);
+            font-weight: bold; color: #555; letter-spacing: 2px;
         }
-
     </style>
 </head>
 <body>
@@ -228,202 +170,149 @@
     <div class="display-box">
         <button class="swap-btn" onclick="swapSide()">🔄 FLIP SIDE</button>
 
-        <!-- WHEEL CONTROLS (Corner Buttons) -->
-        <!-- Top Left -->
+        <!-- Controls Visual -->
         <div class="wheel-control ctrl-tl">
             <div class="wheel-label">UL</div>
-            <button class="wheel-btn" onclick="rotateWheel(0, -1)" title="Counter-Clockwise">↺</button>
-            <button class="wheel-btn" onclick="rotateWheel(0, 1)" title="Clockwise">↻</button>
+            <button class="wheel-btn" onclick="userTurn(0, -1)">↺</button>
+            <button class="wheel-btn" onclick="userTurn(0, 1)">↻</button>
         </div>
-        <!-- Top Right -->
         <div class="wheel-control ctrl-tr">
             <div class="wheel-label">UR</div>
-            <button class="wheel-btn" onclick="rotateWheel(1, -1)" title="Counter-Clockwise">↺</button>
-            <button class="wheel-btn" onclick="rotateWheel(1, 1)" title="Clockwise">↻</button>
+            <button class="wheel-btn" onclick="userTurn(1, -1)">↺</button>
+            <button class="wheel-btn" onclick="userTurn(1, 1)">↻</button>
         </div>
-        <!-- Bottom Left -->
         <div class="wheel-control ctrl-bl">
-            <button class="wheel-btn" onclick="rotateWheel(2, -1)" title="Counter-Clockwise">↺</button>
-            <button class="wheel-btn" onclick="rotateWheel(2, 1)" title="Clockwise">↻</button>
+            <button class="wheel-btn" onclick="userTurn(2, -1)">↺</button>
+            <button class="wheel-btn" onclick="userTurn(2, 1)">↻</button>
             <div class="wheel-label">DL</div>
         </div>
-        <!-- Bottom Right -->
         <div class="wheel-control ctrl-br">
-            <button class="wheel-btn" onclick="rotateWheel(3, -1)" title="Counter-Clockwise">↺</button>
-            <button class="wheel-btn" onclick="rotateWheel(3, 1)" title="Clockwise">↻</button>
+            <button class="wheel-btn" onclick="userTurn(3, -1)">↺</button>
+            <button class="wheel-btn" onclick="userTurn(3, 1)">↻</button>
             <div class="wheel-label">DR</div>
         </div>
 
-        <!-- RUBIK'S CLOCK BODY -->
         <div class="rubiks-body">
             <div class="clock-grid" id="clockGrid"></div>
-            
             <!-- Pins -->
             <div class="pin top-left" id="pin0" onclick="togglePin(0)"></div>
             <div class="pin top-right" id="pin1" onclick="togglePin(1)"></div>
             <div class="pin bottom-left" id="pin2" onclick="togglePin(2)"></div>
             <div class="pin bottom-right" id="pin3" onclick="togglePin(3)"></div>
-
             <div class="side-indicator" id="sideLabel">FRONT SIDE</div>
         </div>
     </div>
 
     <div class="panel">
         <button class="btn-action btn-random" onclick="randomiseClock()">Scramble</button>
-        <button class="btn-action btn-reset" onclick="resetClock()">Reset / Solved</button>
-        <button class="btn-action btn-download" onclick="downloadImage()">Download (Save As)</button>
+        <button class="btn-action btn-reset" onclick="resetClock()">Reset</button>
+        <button class="btn-action btn-download" onclick="downloadImage()">Download</button>
     </div>
 
     <script>
-        // --- STATE VARIABLES ---
-        // 18 jam (0-8 Front, 9-17 Back)
-        // Nilai 0 = Jam 12, 1 = Jam 1, dst.
+        // --- DATA STATE ---
+        // 0-8: Front Side, 9-17: Back Side
         let clockState = new Array(18).fill(0);
-        
-        // 4 Pin (0=UL, 1=UR, 2=DL, 3=DR)
-        // true = UP (Aktif di Depan), false = DOWN (Aktif di Belakang)
-        let pinState = [false, false, false, false]; 
-        
+        // Pins: true=UP (Active Front), false=DOWN (Active Back)
+        // 0:TL, 1:TR, 2:BL, 3:BR (Relative to Front)
+        let pinState = [false, false, false, false];
         let isFrontSide = true;
 
         document.addEventListener('DOMContentLoaded', () => {
             renderAll();
         });
 
-        // --- CORE LOGIC: MOVE MECHANISM ---
-        
-        // Fungsi interaksi tombol roda
-        // visualCorner: 0(TL), 1(TR), 2(BL), 3(BR) berdasarkan apa yang user LIHAT
-        function rotateWheel(visualCorner, direction) {
-            // Mapping Visual ke Fisik
-            // Jika Front: TL=0, TR=1, BL=2, BR=3
-            // Jika Back:  TL=1, TR=0, BL=3, BR=2 (Kiri kanan tertukar saat dibalik)
-            
-            let physicalWheel;
-            let moveDir = direction;
+        // --- CORE MECHANICS (THE FIX) ---
+
+        // Fungsi yang dipanggil oleh tombol HTML
+        // visualIndex: 0(UL), 1(UR), 2(DL), 3(DR) berdasarkan apa yang user LIHAT
+        // visualDir: 1 (CW sesuai jam dinding yg dilihat), -1 (CCW)
+        function userTurn(visualIndex, visualDir) {
+            let physicalWheelIndex;
+            let physicalDir;
 
             if (isFrontSide) {
-                physicalWheel = visualCorner;
+                // Di Front, Visual sama dengan Fisik
+                physicalWheelIndex = visualIndex; 
+                physicalDir = visualDir; 
             } else {
-                // Di sisi belakang, tombol kiri menggerakkan roda fisik kanan, dst.
-                // Arah putaran juga: CW dari belakang = CCW dari depan?
-                // Biasanya simulasi: tombol CW memutar jarum jam searah jarum jam RELATIF terhadap sisi yang dilihat.
-                // Jadi direction tetap, tapi pin mapping dibalik.
-                
-                if (visualCorner === 0) physicalWheel = 1; // TL Visual -> TR Fisik
-                if (visualCorner === 1) physicalWheel = 0; // TR Visual -> TL Fisik
-                if (visualCorner === 2) physicalWheel = 3;
-                if (visualCorner === 3) physicalWheel = 2;
+                // Di Back, posisi tertukar kiri-kanan
+                // Visual UL (0) -> Fisik TR (1)
+                // Visual UR (1) -> Fisik TL (0)
+                // Visual DL (2) -> Fisik DR (3)
+                // Visual DR (3) -> Fisik DL (2)
+                const mapBackToFront = [1, 0, 3, 2];
+                physicalWheelIndex = mapBackToFront[visualIndex];
+
+                // Di Back, jika kita putar CW (searah jarum jam visual),
+                // poros fisik sebenarnya berputar CCW dilihat dari depan.
+                physicalDir = -visualDir;
             }
 
-            // Jalankan Logika Fisik
-            applyMove(physicalWheel, moveDir);
+            applyMove(physicalWheelIndex, physicalDir);
             renderAll();
         }
 
-        // Menerapkan gerakan pada jam berdasarkan Roda Fisik (0-3) dan Arah
+        // Menerapkan rotasi ke KEDUA SISI
+        // wheelIdx: 0(TL), 1(TR), 2(BL), 3(BR) (Fisik / Front Perspective)
+        // dir: +1 (CW Front), -1 (CCW Front)
         function applyMove(wheelIdx, dir) {
-            // --- LOGIKA SISI DEPAN (FRONT) ---
-            // Jam 0-8. Dipengaruhi jika Pin = UP (true)
             
-            // Masker untuk menentukan jam mana yang bergerak
-            let frontAffected = new Array(9).fill(false);
+            // --- 1. EFEK SISI DEPAN (FRONT) ---
+            // Sudut Front yang sesuai selalu berputar
+            // Mapping Wheel ke Index Jam Front (0, 2, 6, 8)
+            const frontCornerIndices = [0, 2, 6, 8];
+            const targetFrontCorner = frontCornerIndices[wheelIdx];
             
-            // Corner yang menempel pada roda SELALU bergerak
-            let cornerMap = [0, 2, 6, 8]; // Mapping Wheel Index ke Clock Index
-            frontAffected[cornerMap[wheelIdx]] = true;
+            // Putar sudut depan
+            clockState[targetFrontCorner] = normalize(clockState[targetFrontCorner] + dir);
 
-            // Logika Pin:
-            // Jika Pin X UP, maka Pin X menghubungkan Corner X ke Cross (Tengah+Tepi)
-            // Gerakan merambat: Wheel -> Corner -> (Jika Pin UP) -> Cross -> (Jika Pin Lain UP) -> Corner Lain
+            // Cek Pin untuk Cross Depan
+            // Jika Pin pada roda yang diputar sedang UP (true), Cross ikut berputar
+            const frontCrossIndices = [1, 3, 4, 5, 7]; // Atas, Kiri, Tengah, Kanan, Bawah
             
-            let crossClocks = [1, 3, 4, 5, 7]; // Jam Tengah dan Tepi
-            let crossActive = false;
-
-            // 1. Cek apakah roda yang diputar pin-nya UP?
-            if (pinState[wheelIdx]) {
-                crossActive = true; // Roda menggerakkan Cross
-            }
-
-            // 2. Jika Cross aktif, tandai semua jam cross
-            if (crossActive) {
-                crossClocks.forEach(idx => frontAffected[idx] = true);
-                
-                // 3. Cek pin LAIN. Jika Pin Y juga UP, Cross menggerakkan Corner Y
-                for (let i = 0; i < 4; i++) {
-                    if (i !== wheelIdx && pinState[i]) {
-                        frontAffected[cornerMap[i]] = true;
-                    }
-                }
-            }
-
-            // Terapkan ke Front State
-            for (let i = 0; i < 9; i++) {
-                if (frontAffected[i]) {
-                    clockState[i] = (clockState[i] + dir + 12) % 12;
-                }
+            if (pinState[wheelIdx] === true) {
+                // Putar semua bagian cross depan
+                frontCrossIndices.forEach(idx => {
+                    clockState[idx] = normalize(clockState[idx] + dir);
+                });
             }
 
 
-            // --- LOGIKA SISI BELAKANG (BACK) ---
-            // Jam 9-17. Dipengaruhi jika Pin = DOWN (false)
-            // Mapping Back: 9=TL, 10=Top... visual dari belakang.
-            // Secara fisik, Corner Back 0 (Index 9) satu as roda dengan Front Corner 1 (Index 2/TR).
-            // TAPI, untuk mempermudah, kita anggap Index 9-17 sudah dipetakan secara visual:
-            // 9=Visual Back TL.
+            // --- 2. EFEK SISI BELAKANG (BACK) ---
+            // Poros tembus ke belakang.
+            // Arah putaran di belakang berlawanan dengan arah poros depan (karena dilihat dari sisi sebaliknya).
+            // Jadi kita gunakan: -dir
             
-            // Perlu diperhatikan: Jika kita putar Wheel Front TL (0) CW:
-            // Sisi Depan: Jam 0 Putar CW.
-            // Sisi Belakang: Roda itu ada di Kanan Atas (Visual Back TR / Index 11). Putar CCW (karena dilihat dari belakang).
-            
-            // Untuk mempermudah simulasi tanpa pusing fisika 3D:
-            // Kita hitung affected visual back, lalu terapkan inverse direction.
-            
-            let backAffected = new Array(9).fill(false);
-            
-            // Wheel Fisik 0 (Front TL) = Visual Back TR (Index 11)
-            // Wheel Fisik 1 (Front TR) = Visual Back TL (Index 9)
-            // Wheel Fisik 2 (Front DL) = Visual Back DR (Index 17)
-            // Wheel Fisik 3 (Front DR) = Visual Back DL (Index 15)
-            
-            let backCornerMap = [11, 9, 17, 15]; 
-            let visualBackCorner = backCornerMap[wheelIdx];
-            
-            backAffected[visualBackCorner - 9] = true; // -9 karena array affected cuma 0-8
+            const backDir = -dir;
 
-            // Logika Pin Belakang (Kebalikan Depan)
-            // Pin aktif jika !pinState
-            let backCrossActive = false;
-            
-            // Cek pin roda fisik ini (wheelIdx)
-            if (!pinState[wheelIdx]) {
-                backCrossActive = true;
-            }
+            // Sudut Belakang yang sesuai selalu berputar
+            // Mapping Wheel Fisik ke Index Jam Back.
+            // Wheel 0 (Front TL) tembus ke Back TR (Index 11)
+            // Wheel 1 (Front TR) tembus ke Back TL (Index 9)
+            // Wheel 2 (Front BL) tembus ke Back DR (Index 17)
+            // Wheel 3 (Front DR) tembus ke Back DL (Index 15)
+            const backCornerIndices = [11, 9, 17, 15]; 
+            const targetBackCorner = backCornerIndices[wheelIdx];
 
-            if (backCrossActive) {
-                crossClocks.forEach(idx => backAffected[idx] = true);
-                
-                // Cek pin lain
-                for (let i = 0; i < 4; i++) {
-                    // Cek corner fisik lain
-                    if (i !== wheelIdx && !pinState[i]) {
-                        // Cari visual index corner fisik tersebut
-                        let vIdx = backCornerMap[i] - 9;
-                        backAffected[vIdx] = true;
-                    }
-                }
-            }
+            // Putar sudut belakang
+            clockState[targetBackCorner] = normalize(clockState[targetBackCorner] + backDir);
 
-            // Terapkan ke Back State (9-17)
-            // Arah: Jika dilihat dari belakang, memutar roda yang sama terasa berlawanan arah
-            let backDir = -dir; 
+            // Cek Pin untuk Cross Belakang
+            // Cross belakang aktif jika Pin sedang DOWN (false)
+            const backCrossIndices = [10, 12, 13, 14, 16]; // Mapping jam cross di belakang
             
-            for (let i = 0; i < 9; i++) {
-                if (backAffected[i]) {
-                    let actualIndex = 9 + i;
-                    clockState[actualIndex] = (clockState[actualIndex] + backDir + 12) % 12;
-                }
+            if (pinState[wheelIdx] === false) {
+                // Putar semua bagian cross belakang
+                backCrossIndices.forEach(idx => {
+                    clockState[idx] = normalize(clockState[idx] + backDir);
+                });
             }
+        }
+
+        // Helper supaya jam tetap 0-11
+        function normalize(val) {
+            return (val % 12 + 12) % 12;
         }
 
 
@@ -431,7 +320,6 @@
         function renderAll() {
             renderClocks();
             renderPins();
-            document.getElementById('sideLabel').innerText = isFrontSide ? "FRONT SIDE" : "BACK SIDE";
         }
 
         function renderClocks() {
@@ -454,6 +342,7 @@
                 clockDiv.appendChild(handDiv);
                 grid.appendChild(clockDiv);
             }
+            document.getElementById('sideLabel').innerText = isFrontSide ? "FRONT SIDE" : "BACK SIDE";
         }
 
         function renderPins() {
@@ -463,32 +352,23 @@
             for (let i = 0; i < 4; i++) {
                 const pinEl = document.getElementById(`pin${i}`);
                 let isUp = pinState[i];
-                // Visualisasi logic: Kuning selalu menonjol
                 let visualUp = isFrontSide ? isUp : !isUp;
 
                 pinEl.style.backgroundColor = visualUp ? colorUp : colorDown;
                 pinEl.style.transform = visualUp ? 'scale(1.15)' : 'scale(0.85)';
-                pinEl.style.boxShadow = visualUp 
-                    ? '0 5px 10px rgba(0,0,0,0.3)' 
-                    : 'inset 0 3px 6px rgba(0,0,0,0.6)';
-                
-                // Indikator visual pin status
-                pinEl.title = visualUp ? "Pin is UP" : "Pin is DOWN";
+                pinEl.style.boxShadow = visualUp ? '0 5px 10px rgba(0,0,0,0.3)' : 'inset 0 3px 6px rgba(0,0,0,0.6)';
             }
         }
 
-        // --- ACTIONS ---
         function swapSide() {
             isFrontSide = !isFrontSide;
-            // Animasi kecil pada container
-            const box = document.querySelector('.rubiks-body');
-            box.style.transition = "transform 0.3s";
-            box.style.transform = "rotateY(90deg)";
-            
+            // Animasi flip
+            const body = document.querySelector('.rubiks-body');
+            body.style.transform = "rotateY(90deg)"; // Mulai flip
             setTimeout(() => {
                 renderAll();
-                box.style.transform = "rotateY(0deg)";
-            }, 300);
+                body.style.transform = "rotateY(0deg)"; // Selesai flip
+            }, 400); // Setengah dari transition duration CSS
         }
 
         function togglePin(index) {
@@ -497,23 +377,20 @@
         }
 
         function randomiseClock() {
-            // Acak Jam
             for (let i = 0; i < 18; i++) clockState[i] = Math.floor(Math.random() * 12);
-            // Acak Pin
             for (let i = 0; i < 4; i++) pinState[i] = Math.random() < 0.5;
             renderAll();
         }
 
         function resetClock() {
             clockState.fill(0);
-            pinState = [false, false, false, false];
+            pinState = [false, false, false, false]; // All pins down (standard solved state setup)
             isFrontSide = true;
             renderAll();
         }
 
-        // --- DOWNLOAD WITH SAVE AS OPTION ---
+        // --- DOWNLOAD ---
         async function downloadImage() {
-            // 1. Buat Container Rendering (Hidden)
             const wrapper = document.createElement('div');
             Object.assign(wrapper.style, {
                 position: 'fixed', left: '-9999px', top: '0',
@@ -522,73 +399,53 @@
                 fontFamily: 'sans-serif'
             });
 
-            // Tambahkan DOM Sisi Depan dan Belakang
             wrapper.appendChild(createStaticDOM(true));
             wrapper.appendChild(createStaticDOM(false));
             document.body.appendChild(wrapper);
 
             try {
-                // 2. Render ke Canvas
                 const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: "#ffffff" });
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
                 
-                // 3. Proses Simpan
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-                
-                // Cek ketersediaan File System Access API
                 if ('showSaveFilePicker' in window) {
                     try {
                         const handle = await window.showSaveFilePicker({
-                            suggestedName: 'rubiks_clock_state.png',
-                            types: [{
-                                description: 'PNG Image',
-                                accept: { 'image/png': ['.png'] },
-                            }],
+                            suggestedName: 'rubiks_clock.png',
+                            types: [{ accept: { 'image/png': ['.png'] } }],
                         });
                         const writable = await handle.createWritable();
                         await writable.write(blob);
                         await writable.close();
-                    } catch (err) {
-                        // User membatalkan dialog save as, tidak perlu error
-                        if (err.name !== 'AbortError') console.error(err);
-                    }
+                    } catch (e) {}
                 } else {
-                    // Fallback untuk browser yang tidak support (Firefox, Safari, dll)
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement('a');
-                    link.download = 'rubiks_clock_state.png';
+                    link.download = 'rubiks_clock.png';
                     link.href = url;
                     link.click();
-                    URL.revokeObjectURL(url);
-                    alert("Gambar telah diunduh ke folder Downloads default Anda.");
                 }
             } catch (err) {
-                console.error("Gagal merender gambar:", err);
-                alert("Terjadi kesalahan saat membuat gambar.");
+                console.error(err);
             } finally {
                 document.body.removeChild(wrapper);
             }
         }
 
-        // Helper untuk membuat elemen statis saat download
         function createStaticDOM(isFront) {
             const container = document.createElement('div');
             container.style.textAlign = 'center';
 
             const body = document.createElement('div');
-            // Copy style penting dari .rubiks-body
             Object.assign(body.style, {
-                width: '300px', height: '300px',
-                backgroundColor: '#6ab7ff', borderRadius: '40px',
-                position: 'relative', padding: '15px',
+                width: '300px', height: '300px', backgroundColor: '#6ab7ff', 
+                borderRadius: '40px', position: 'relative', padding: '15px',
                 boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)'
             });
 
-            // Render Jam
             const grid = document.createElement('div');
             Object.assign(grid.style, {
                 display: 'grid', width: '100%', height: '100%',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gridTemplateRows: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: 'repeat(3, 1fr)',
                 justifyItems: 'center', alignItems: 'center'
             });
 
@@ -608,39 +465,29 @@
                     transformOrigin: 'bottom center', transform: `rotate(${hour * 30}deg)`,
                     borderRadius: '2px'
                 });
-                
                 face.appendChild(hand);
                 grid.appendChild(face);
             }
             body.appendChild(grid);
 
-            // Render Pins Statis
-            const positions = [
-                {t:'85px', l:'85px'}, {t:'85px', r:'85px'},
-                {b:'85px', l:'85px'}, {b:'85px', r:'85px'}
-            ];
-            
+            // Pins for screenshot
+            const positions = [ {t:'85px', l:'85px'}, {t:'85px', r:'85px'}, {b:'85px', l:'85px'}, {b:'85px', r:'85px'} ];
             for(let i=0; i<4; i++) {
                 const p = document.createElement('div');
                 let isUp = pinState[i];
                 let visualUp = isFront ? isUp : !isUp;
-                
                 Object.assign(p.style, {
-                    position: 'absolute', width: '20px', height: '20px',
-                    borderRadius: '50%', border: '2px solid rgba(0,0,0,0.2)',
-                    backgroundColor: visualUp ? '#ffd700' : '#3e2723',
-                    zIndex: '10', transform: visualUp ? 'scale(1.1)' : 'scale(0.9)',
-                    ...positions[i] // Apply top/left/bottom/right
+                    position: 'absolute', width: '20px', height: '20px', borderRadius: '50%',
+                    border: '2px solid rgba(0,0,0,0.2)', backgroundColor: visualUp ? '#ffd700' : '#3e2723',
+                    zIndex: '10', transform: visualUp ? 'scale(1.1)' : 'scale(0.9)', ...positions[i]
                 });
                 body.appendChild(p);
             }
-
             container.appendChild(body);
             
             const label = document.createElement('h3');
             label.innerText = isFront ? 'FRONT' : 'BACK';
-            label.style.marginTop = '15px';
-            label.style.color = '#333';
+            label.style.marginTop = '15px'; label.style.color = '#333';
             container.appendChild(label);
 
             return container;
