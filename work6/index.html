@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubik's Clock Game</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --clock-body: #6ab7ff; /* Warna plastik biru khas Rubiks Clock */
+            --clock-face: #333;
+            --hand-color: #fff;
+            --pin-up: #ffd700; /* Kuning (Pin Naik) */
+            --pin-down: #5c4033; /* Coklat Gelap (Pin Turun) */
+            --wheel-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        /* --- DISPLAY BOX --- */
+        .display-box {
+            position: relative;
+            background-color: #ffffff;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Swap Button (Top Right Absolute) */
+        .swap-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        .swap-btn:hover {
+            background-color: #555;
+        }
+
+        /* Rubiks Clock Physical Body */
+        .rubiks-body {
+            width: 300px;
+            height: 300px;
+            background-color: var(--clock-body);
+            border-radius: 50%; /* Bentuk agak bulat tapi kita buat wadah grid */
+            border-radius: 40px; /* Sudut tumpul */
+            position: relative;
+            padding: 15px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2), 0 5px 10px rgba(0,0,0,0.2);
+        }
+
+        /* Grid untuk 9 Jam (3x3) */
+        .clock-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100%;
+            justify-items: center;
+            align-items: center;
+        }
+
+        /* Tampilan Wajah Jam */
+        .clock-face {
+            width: 70px;
+            height: 70px;
+            background-color: var(--clock-face);
+            border-radius: 50%;
+            position: relative;
+            border: 2px solid #ddd;
+        }
+
+        /* Indikator Jam 12 (Titik kecil di atas) */
+        .clock-face::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 4px;
+            background-color: #888;
+            border-radius: 50%;
+        }
+
+        /* Jarum Jam */
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            width: 4px;
+            height: 28px; /* Panjang jarum */
+            background-color: var(--hand-color);
+            transform-origin: bottom center;
+            border-radius: 2px;
+            transition: transform 0.3s ease-in-out;
+        }
+        /* Titik tengah jarum */
+        .hand::before {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: -3px;
+            width: 10px;
+            height: 10px;
+            background-color: var(--hand-color);
+            border-radius: 50%;
+        }
+
+        /* PINS (4 Pin di antara jam) */
+        .pin {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s;
+            z-index: 5;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        
+        /* Posisi Pin relatif terhadap wadah body */
+        .pin.top-left { top: 85px; left: 85px; }
+        .pin.top-right { top: 85px; right: 85px; }
+        .pin.bottom-left { bottom: 85px; left: 85px; }
+        .pin.bottom-right { bottom: 85px; right: 85px; }
+
+        /* Roda Gigi (Wheels) - Visual Saja di sudut */
+        .wheel {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 3px dashed rgba(255,255,255,0.3);
+            border-radius: 50%;
+            z-index: 2;
+        }
+        .wheel.tl { top: -10px; left: -10px; }
+        .wheel.tr { top: -10px; right: -10px; }
+        .wheel.bl { bottom: -10px; left: -10px; }
+        .wheel.br { bottom: -10px; right: -10px; }
+
+        /* --- PANEL --- */
+        .panel {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn-action {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-action:hover {
+            background-color: #45a049;
+        }
+        .btn-reset {
+            background-color: #f44336;
+        }
+        .btn-reset:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Label Sisi */
+        .side-label {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.8);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Display Box Container -->
+    <div class="display-box">
+        <!-- Tombol Swap Sisi -->
+        <button class="swap-btn" onclick="swapSide()">🔄 Flip</button>
+
+        <!-- Rubiks Clock Body -->
+        <div class="rubiks-body">
+            <!-- Roda (Hiasan sudut) -->
+            <div class="wheel tl"></div>
+            <div class="wheel tr"></div>
+            <div class="wheel bl"></div>
+            <div class="wheel br"></div>
+
+            <!-- Area Grid Jam -->
+            <div class="clock-grid" id="clockGrid">
+                <!-- Jam akan digenerate oleh JavaScript -->
+            </div>
+
+            <!-- 4 Pin -->
+            <div class="pin top-left" id="pin0" onclick="togglePin(0)"></div>
+            <div class="pin top-right" id="pin1" onclick="togglePin(1)"></div>
+            <div class="pin bottom-left" id="pin2" onclick="togglePin(2)"></div>
+            <div class="pin bottom-right" id="pin3" onclick="togglePin(3)"></div>
+
+            <!-- Label Penanda Sisi -->
+            <div class="side-label" id="sideLabel">FRONT</div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="panel">
+        <button class="btn-action" onclick="randomiseClock()">Randomise</button>
+        <button class="btn-action btn-reset" onclick="resetClock()">Reset (Solve)</button>
+    </div>
+
+    <script>
+        // --- DATA STATE ---
+        // Kita memiliki 18 jam (9 Depan, 9 Belakang)
+        // Nilai 0 = jam 12, 1 = jam 1, ... 11 = jam 11.
+        let clockState = new Array(18).fill(0); 
+
+        // 4 Pin. true = UP (Kuning), false = DOWN (Coklat)
+        let pinState = [false, false, false, false]; // Default turun (solved state biasanya)
+
+        // Sisi yang aktif dilihat (true = Front, false = Back)
+        let isFrontSide = true;
+
+        // Inisialisasi awal
+        document.addEventListener('DOMContentLoaded', () => {
+            renderClocks();
+            renderPins();
+        });
+
+        // --- FUNGSI UTAMA ---
+
+        // 1. Menggambar Jam
+        function renderClocks() {
+            const grid = document.getElementById('clockGrid');
+            grid.innerHTML = ''; // Bersihkan grid
+
+            // Tentukan indeks mana yang mau ditampilkan
+            // Depan: index 0-8
+            // Belakang: index 9-17
+            // Visual mapping: Kalau dibalik (Back), jam kiri jadi kanan.
+            // Namun untuk simulasi sederhana, kita render urutan array saja.
+            
+            const startIndex = isFrontSide ? 0 : 9;
+
+            for (let i = 0; i < 9; i++) {
+                const actualIndex = startIndex + i;
+                const hourValue = clockState[actualIndex];
+                
+                // Konversi nilai jam (0-11) ke Derajat rotasi (0 jam = 0 derajat)
+                // 1 jam = 30 derajat (360 / 12)
+                const degrees = hourValue * 30;
+
+                // Buat elemen HTML
+                const clockDiv = document.createElement('div');
+                clockDiv.className = 'clock-face';
+                
+                const handDiv = document.createElement('div');
+                handDiv.className = 'hand';
+                handDiv.style.transform = `rotate(${degrees}deg)`;
+
+                clockDiv.appendChild(handDiv);
+                grid.appendChild(clockDiv);
+            }
+
+            // Update Label
+            document.getElementById('sideLabel').innerText = isFrontSide ? "FRONT" : "BACK";
+        }
+
+        // 2. Menggambar Pin
+        function renderPins() {
+            // Warna Pin
+            const colorUp = 'var(--pin-up)';
+            const colorDown = 'var(--pin-down)';
+
+            // Jika kita di sisi Belakang, Pin yang "Naik" di depan akan terlihat "Turun" di belakang,
+            // atau secara mekanis pin menembus.
+            // Logika Rubik Clock: Jika pin ditekan di depan, dia naik di depan (rata body belakang).
+            // Jika pin didorong dari belakang, dia naik di belakang.
+            // Untuk simulasi ini: Pin State menyimpan status fisik pin relatif terhadap Sisi Depan.
+            // UP (True) = Menonjol di Depan.
+            // DOWN (False) = Menonjol di Belakang.
+
+            for (let i = 0; i < 4; i++) {
+                const pinEl = document.getElementById(`pin${i}`);
+                let isUp = pinState[i];
+
+                // Jika kita melihat sisi belakang, persepsi "Up/Down" terbalik visualnya
+                // atau kita anggap warna kuning selalu sisi yang menonjol.
+                
+                let visualUp = isFrontSide ? isUp : !isUp;
+
+                pinEl.style.backgroundColor = visualUp ? colorUp : colorDown;
+                
+                // Efek visual tekan (transform)
+                pinEl.style.transform = visualUp ? 'scale(1.1)' : 'scale(0.9)';
+                pinEl.style.boxShadow = visualUp ? '0 4px 8px rgba(0,0,0,0.3)' : 'inset 0 2px 5px rgba(0,0,0,0.5)';
+            }
+        }
+
+        // 3. Swap Side (Tombol Kanan Atas)
+        function swapSide() {
+            isFrontSide = !isFrontSide;
+            
+            // Animasi flip sederhana (optional, via CSS class di container bisa)
+            const body = document.querySelector('.rubiks-body');
+            body.style.transform = "scale(0.95)";
+            setTimeout(() => {
+                renderClocks();
+                renderPins();
+                body.style.transform = "scale(1)";
+            }, 150);
+        }
+
+        // 4. Toggle Pin (Interaksi klik pin)
+        function togglePin(index) {
+            // Mengubah status pin fisik
+            pinState[index] = !pinState[index];
+            renderPins();
+        }
+
+        // 5. Randomise (Tombol di Panel)
+        function randomiseClock() {
+            // Mengacak 18 jam
+            for (let i = 0; i < 18; i++) {
+                // Random 0 sampai 11
+                clockState[i] = Math.floor(Math.random() * 12);
+            }
+
+            // Mengacak 4 pin
+            for (let i = 0; i < 4; i++) {
+                pinState[i] = Math.random() < 0.5;
+            }
+
+            renderClocks();
+            renderPins();
+        }
+
+        // 6. Reset / Solve
+        function resetClock() {
+            // Kembalikan ke 0 (Jam 12)
+            clockState.fill(0);
+            // Kembalikan pin ke bawah (atau kondisi default)
+            pinState = [false, false, false, false];
+            
+            isFrontSide = true;
+            renderClocks();
+            renderPins();
+        }
+
+    </script>
+</body>
+</html>
