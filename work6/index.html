@@ -4,15 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubik's Clock Game</title>
+    <!-- Library untuk screenshot (HTML to Canvas) -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         :root {
             --bg-color: #f0f2f5;
-            --clock-body: #6ab7ff; /* Warna plastik biru khas Rubiks Clock */
+            --clock-body: #6ab7ff;
             --clock-face: #333;
             --hand-color: #fff;
-            --pin-up: #ffd700; /* Kuning (Pin Naik) */
-            --pin-down: #5c4033; /* Coklat Gelap (Pin Turun) */
-            --wheel-color: transparent;
+            --pin-up: #ffd700;
+            --pin-down: #5c4033;
         }
 
         body {
@@ -39,7 +40,6 @@
             align-items: center;
         }
 
-        /* Swap Button (Top Right Absolute) */
         .swap-btn {
             position: absolute;
             top: 15px;
@@ -54,23 +54,20 @@
             transition: background 0.2s;
             z-index: 10;
         }
-        .swap-btn:hover {
-            background-color: #555;
-        }
+        .swap-btn:hover { background-color: #555; }
 
-        /* Rubiks Clock Physical Body */
+        /* Struktur Rubik */
         .rubiks-body {
             width: 300px;
             height: 300px;
             background-color: var(--clock-body);
-            border-radius: 50%; /* Bentuk agak bulat tapi kita buat wadah grid */
-            border-radius: 40px; /* Sudut tumpul */
+            border-radius: 40px;
             position: relative;
             padding: 15px;
             box-shadow: inset 0 0 20px rgba(0,0,0,0.2), 0 5px 10px rgba(0,0,0,0.2);
+            /* Penting agar elemen anak absolute position (seperti Pin) relatif terhadap ini */
         }
 
-        /* Grid untuk 9 Jam (3x3) */
         .clock-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -81,7 +78,6 @@
             align-items: center;
         }
 
-        /* Tampilan Wajah Jam */
         .clock-face {
             width: 70px;
             height: 70px;
@@ -89,9 +85,10 @@
             border-radius: 50%;
             position: relative;
             border: 2px solid #ddd;
+            box-sizing: border-box; /* Agar border tidak menambah ukuran */
         }
 
-        /* Indikator Jam 12 (Titik kecil di atas) */
+        /* Titik jam 12 */
         .clock-face::after {
             content: '';
             position: absolute;
@@ -104,19 +101,18 @@
             border-radius: 50%;
         }
 
-        /* Jarum Jam */
         .hand {
             position: absolute;
             bottom: 50%;
             left: 50%;
             width: 4px;
-            height: 28px; /* Panjang jarum */
+            height: 28px;
             background-color: var(--hand-color);
             transform-origin: bottom center;
             border-radius: 2px;
             transition: transform 0.3s ease-in-out;
+            z-index: 1;
         }
-        /* Titik tengah jarum */
         .hand::before {
             content: '';
             position: absolute;
@@ -128,7 +124,7 @@
             border-radius: 50%;
         }
 
-        /* PINS (4 Pin di antara jam) */
+        /* PINS */
         .pin {
             position: absolute;
             width: 20px;
@@ -140,14 +136,12 @@
             z-index: 5;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
-        
-        /* Posisi Pin relatif terhadap wadah body */
         .pin.top-left { top: 85px; left: 85px; }
         .pin.top-right { top: 85px; right: 85px; }
         .pin.bottom-left { bottom: 85px; left: 85px; }
         .pin.bottom-right { bottom: 85px; right: 85px; }
 
-        /* Roda Gigi (Wheels) - Visual Saja di sudut */
+        /* Hiasan Roda */
         .wheel {
             position: absolute;
             width: 40px;
@@ -169,6 +163,8 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             display: flex;
             gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .btn-action {
@@ -181,17 +177,14 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .btn-action:hover {
-            background-color: #45a049;
-        }
-        .btn-reset {
-            background-color: #f44336;
-        }
-        .btn-reset:hover {
-            background-color: #d32f2f;
-        }
+        .btn-action:hover { background-color: #45a049; }
+        
+        .btn-reset { background-color: #f44336; }
+        .btn-reset:hover { background-color: #d32f2f; }
 
-        /* Label Sisi */
+        .btn-download { background-color: #2196F3; }
+        .btn-download:hover { background-color: #1976D2; }
+
         .side-label {
             position: absolute;
             bottom: 10px;
@@ -208,83 +201,56 @@
 </head>
 <body>
 
-    <!-- Display Box Container -->
     <div class="display-box">
-        <!-- Tombol Swap Sisi -->
         <button class="swap-btn" onclick="swapSide()">🔄 Flip</button>
 
-        <!-- Rubiks Clock Body -->
         <div class="rubiks-body">
-            <!-- Roda (Hiasan sudut) -->
-            <div class="wheel tl"></div>
-            <div class="wheel tr"></div>
-            <div class="wheel bl"></div>
-            <div class="wheel br"></div>
+            <!-- Hiasan Sudut -->
+            <div class="wheel tl"></div> <div class="wheel tr"></div>
+            <div class="wheel bl"></div> <div class="wheel br"></div>
 
-            <!-- Area Grid Jam -->
-            <div class="clock-grid" id="clockGrid">
-                <!-- Jam akan digenerate oleh JavaScript -->
-            </div>
+            <!-- Grid Jam -->
+            <div class="clock-grid" id="clockGrid"></div>
 
-            <!-- 4 Pin -->
+            <!-- Pins -->
             <div class="pin top-left" id="pin0" onclick="togglePin(0)"></div>
             <div class="pin top-right" id="pin1" onclick="togglePin(1)"></div>
             <div class="pin bottom-left" id="pin2" onclick="togglePin(2)"></div>
             <div class="pin bottom-right" id="pin3" onclick="togglePin(3)"></div>
 
-            <!-- Label Penanda Sisi -->
+            <!-- Label -->
             <div class="side-label" id="sideLabel">FRONT</div>
         </div>
     </div>
 
-    <!-- Control Panel -->
     <div class="panel">
         <button class="btn-action" onclick="randomiseClock()">Randomise</button>
         <button class="btn-action btn-reset" onclick="resetClock()">Reset (Solve)</button>
+        <button class="btn-action btn-download" onclick="downloadImage()">Download Image</button>
     </div>
 
     <script>
         // --- DATA STATE ---
-        // Kita memiliki 18 jam (9 Depan, 9 Belakang)
-        // Nilai 0 = jam 12, 1 = jam 1, ... 11 = jam 11.
-        let clockState = new Array(18).fill(0); 
-
-        // 4 Pin. true = UP (Kuning), false = DOWN (Coklat)
-        let pinState = [false, false, false, false]; // Default turun (solved state biasanya)
-
-        // Sisi yang aktif dilihat (true = Front, false = Back)
+        let clockState = new Array(18).fill(0); // 0-8 Front, 9-17 Back
+        let pinState = [false, false, false, false]; // true=UP, false=DOWN
         let isFrontSide = true;
 
-        // Inisialisasi awal
         document.addEventListener('DOMContentLoaded', () => {
             renderClocks();
             renderPins();
         });
 
-        // --- FUNGSI UTAMA ---
-
-        // 1. Menggambar Jam
+        // --- RENDER UTAMA (DISPLAY) ---
         function renderClocks() {
             const grid = document.getElementById('clockGrid');
-            grid.innerHTML = ''; // Bersihkan grid
-
-            // Tentukan indeks mana yang mau ditampilkan
-            // Depan: index 0-8
-            // Belakang: index 9-17
-            // Visual mapping: Kalau dibalik (Back), jam kiri jadi kanan.
-            // Namun untuk simulasi sederhana, kita render urutan array saja.
+            grid.innerHTML = '';
             
             const startIndex = isFrontSide ? 0 : 9;
 
             for (let i = 0; i < 9; i++) {
-                const actualIndex = startIndex + i;
-                const hourValue = clockState[actualIndex];
-                
-                // Konversi nilai jam (0-11) ke Derajat rotasi (0 jam = 0 derajat)
-                // 1 jam = 30 derajat (360 / 12)
+                const hourValue = clockState[startIndex + i];
                 const degrees = hourValue * 30;
 
-                // Buat elemen HTML
                 const clockDiv = document.createElement('div');
                 clockDiv.className = 'clock-face';
                 
@@ -295,90 +261,159 @@
                 clockDiv.appendChild(handDiv);
                 grid.appendChild(clockDiv);
             }
-
-            // Update Label
             document.getElementById('sideLabel').innerText = isFrontSide ? "FRONT" : "BACK";
         }
 
-        // 2. Menggambar Pin
         function renderPins() {
-            // Warna Pin
             const colorUp = 'var(--pin-up)';
             const colorDown = 'var(--pin-down)';
-
-            // Jika kita di sisi Belakang, Pin yang "Naik" di depan akan terlihat "Turun" di belakang,
-            // atau secara mekanis pin menembus.
-            // Logika Rubik Clock: Jika pin ditekan di depan, dia naik di depan (rata body belakang).
-            // Jika pin didorong dari belakang, dia naik di belakang.
-            // Untuk simulasi ini: Pin State menyimpan status fisik pin relatif terhadap Sisi Depan.
-            // UP (True) = Menonjol di Depan.
-            // DOWN (False) = Menonjol di Belakang.
 
             for (let i = 0; i < 4; i++) {
                 const pinEl = document.getElementById(`pin${i}`);
                 let isUp = pinState[i];
-
-                // Jika kita melihat sisi belakang, persepsi "Up/Down" terbalik visualnya
-                // atau kita anggap warna kuning selalu sisi yang menonjol.
-                
+                // Visualisasi: Jika lihat belakang, status pin terlihat kebalikan
                 let visualUp = isFrontSide ? isUp : !isUp;
 
                 pinEl.style.backgroundColor = visualUp ? colorUp : colorDown;
-                
-                // Efek visual tekan (transform)
                 pinEl.style.transform = visualUp ? 'scale(1.1)' : 'scale(0.9)';
                 pinEl.style.boxShadow = visualUp ? '0 4px 8px rgba(0,0,0,0.3)' : 'inset 0 2px 5px rgba(0,0,0,0.5)';
             }
         }
 
-        // 3. Swap Side (Tombol Kanan Atas)
+        // --- ACTIONS ---
         function swapSide() {
             isFrontSide = !isFrontSide;
-            
-            // Animasi flip sederhana (optional, via CSS class di container bisa)
-            const body = document.querySelector('.rubiks-body');
-            body.style.transform = "scale(0.95)";
-            setTimeout(() => {
-                renderClocks();
-                renderPins();
-                body.style.transform = "scale(1)";
-            }, 150);
+            renderClocks();
+            renderPins();
         }
 
-        // 4. Toggle Pin (Interaksi klik pin)
         function togglePin(index) {
-            // Mengubah status pin fisik
             pinState[index] = !pinState[index];
             renderPins();
         }
 
-        // 5. Randomise (Tombol di Panel)
         function randomiseClock() {
-            // Mengacak 18 jam
-            for (let i = 0; i < 18; i++) {
-                // Random 0 sampai 11
-                clockState[i] = Math.floor(Math.random() * 12);
-            }
-
-            // Mengacak 4 pin
-            for (let i = 0; i < 4; i++) {
-                pinState[i] = Math.random() < 0.5;
-            }
-
+            for (let i = 0; i < 18; i++) clockState[i] = Math.floor(Math.random() * 12);
+            for (let i = 0; i < 4; i++) pinState[i] = Math.random() < 0.5;
             renderClocks();
             renderPins();
         }
 
-        // 6. Reset / Solve
         function resetClock() {
-            // Kembalikan ke 0 (Jam 12)
             clockState.fill(0);
-            // Kembalikan pin ke bawah (atau kondisi default)
             pinState = [false, false, false, false];
-            
             isFrontSide = true;
             renderClocks();
             renderPins();
+        }
+
+        // --- FITUR DOWNLOAD ---
+        function downloadImage() {
+            // 1. Buat Container Invisible untuk menampung kedua sisi
+            const wrapper = document.createElement('div');
+            wrapper.style.position = 'absolute';
+            wrapper.style.left = '-9999px'; // Sembunyikan dari layar
+            wrapper.style.top = '0';
+            wrapper.style.display = 'flex';
+            wrapper.style.gap = '40px';
+            wrapper.style.backgroundColor = 'white'; // Background Putih Sesuai Request
+            wrapper.style.padding = '40px';
+            wrapper.style.alignItems = 'flex-start';
+            
+            // 2. Generate DOM untuk Sisi Depan
+            const frontContainer = createSideDOM(true);
+            // 3. Generate DOM untuk Sisi Belakang
+            const backContainer = createSideDOM(false);
+
+            wrapper.appendChild(frontContainer);
+            wrapper.appendChild(backContainer);
+            document.body.appendChild(wrapper);
+
+            // 4. Proses html2canvas
+            html2canvas(wrapper, {
+                backgroundColor: "#ffffff",
+                scale: 2 // Kualitas lebih tinggi
+            }).then(canvas => {
+                // Trigger download
+                const link = document.createElement('a');
+                link.download = 'rubiks_clock_scramble.png';
+                link.href = canvas.toDataURL();
+                link.click();
+
+                // Bersihkan DOM
+                document.body.removeChild(wrapper);
+            });
+        }
+
+        // Helper untuk membuat struktur HTML jam (tanpa mempengaruhi tampilan utama)
+        function createSideDOM(isFront) {
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.alignItems = 'center';
+
+            // Clone Body Rubik
+            const body = document.createElement('div');
+            body.className = 'rubiks-body';
+            // Pastikan scale reset jika ada CSS global yang mempengaruhi
+            body.style.transform = 'none'; 
+            
+            // Grid
+            const grid = document.createElement('div');
+            grid.className = 'clock-grid';
+
+            const startIndex = isFront ? 0 : 9;
+            for (let i = 0; i < 9; i++) {
+                const hour = clockState[startIndex + i];
+                const div = document.createElement('div');
+                div.className = 'clock-face';
+                const hand = document.createElement('div');
+                hand.className = 'hand';
+                hand.style.transform = `rotate(${hour * 30}deg)`;
+                div.appendChild(hand);
+                grid.appendChild(div);
+            }
+            body.appendChild(grid);
+
+            // Pins (Manual Position clone)
+            const pinPositions = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+            const colorUp = '#ffd700'; // Hardcoded dari var CSS
+            const colorDown = '#5c4033';
+
+            for(let i=0; i<4; i++) {
+                const p = document.createElement('div');
+                p.className = `pin ${pinPositions[i]}`;
+                
+                // Logika Visual Pin untuk Export
+                let isUp = pinState[i];
+                let visualUp = isFront ? isUp : !isUp;
+
+                p.style.backgroundColor = visualUp ? colorUp : colorDown;
+                p.style.transform = visualUp ? 'scale(1.1)' : 'scale(0.9)';
+                p.style.boxShadow = visualUp ? '0 4px 8px rgba(0,0,0,0.3)' : 'inset 0 2px 5px rgba(0,0,0,0.5)';
+                body.appendChild(p);
+            }
+
+            // Wheels Decoration (Agar mirip aslinya)
+            const wheels = ['tl', 'tr', 'bl', 'br'];
+            wheels.forEach(pos => {
+                const w = document.createElement('div');
+                w.className = `wheel ${pos}`;
+                body.appendChild(w);
+            });
+
+            container.appendChild(body);
+
+            // Label di bawah gambar
+            const label = document.createElement('h2');
+            label.innerText = isFront ? 'FRONT' : 'BACK';
+            label.style.marginTop = '15px';
+            label.style.fontFamily = 'sans-serif';
+            label.style.color = '#333';
+            
+            container.appendChild(label);
+
+            return container;
         }
 
     </script>
