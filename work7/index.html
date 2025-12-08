@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCD: Deteksi & Klasifikasi Tahu (HSV)</title>
+    <!-- Meload Library OpenCV.js, JSZip, dan FileSaver -->
+    <script src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; text-align: center; }
+        h1 { color: #333; }
+        .status { color: #d9534f; font-weight: bold; margin-bottom: 10px; }
+        .ready { color: #5cb85c; }
+        
+        /* Grid Layout 2x2 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .panel h3 { margin-top: 0; font-size: 1rem; color: #555; }
+
+        canvas {
+            border: 2px dashed #ccc;
+            max-width: 100%;
+            max-height: 300px;
+            cursor: crosshair;
+        }
+
+        #canvasInput { cursor: pointer; background: #fafafa; }
+        #canvasInput:hover { background: #eee; border-color: #999; }
+
+        /* Controls */
+        .controls {
+            grid-column: span 2;
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .slider-group h4 { width: 100%; margin: 5px 0; color: #333; }
+        
+        .slider-item { display: flex; flex-direction: column; font-size: 0.8rem; width: 140px; }
+        
+        .btn-report {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-report:hover { background-color: #0056b3; }
+
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>Sistem Deteksi Kematangan Tahu (PCD HSV)</h1>
+    <div id="status" class="status">Memuat OpenCV.js... (Harap Tunggu)</div>
+
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div class="grid-container">
+        <!-- Panel 1: Input -->
+        <div class="panel">
+            <h3>Input Gambar (Klik untuk Upload)</h3>
+            <canvas id="canvasInput"></canvas>
+            <div id="imgDim" style="font-size:0.8rem; color:#888;">Belum ada gambar</div>
+        </div>
+
+        <!-- Panel 2: Hasil Klasifikasi -->
+        <div class="panel">
+            <h3>Hasil Deteksi & Klasifikasi</h3>
+            <canvas id="canvasOutput"></canvas>
+            <div id="countResult" style="font-size:0.8rem; color:#333;">-</div>
+        </div>
+
+        <!-- Panel 3: Tahu Mentah (Masking) -->
+        <div class="panel">
+            <h3>Filter: Tahu Mentah (Putih/Krem)</h3>
+            <canvas id="canvasRaw"></canvas>
+        </div>
+
+        <!-- Panel 4: Tahu Goreng (Masking) -->
+        <div class="panel">
+            <h3>Filter: Tahu Goreng (Coklat)</h3>
+            <canvas id="canvasFried"></canvas>
+        </div>
+
+        <!-- Kontrol Filter -->
+        <div class="controls">
+            <h3>Pengaturan Filter Warna (HSV)</h3>
+            <p style="font-size: 0.8rem; color: #666;">Sesuaikan slider jika deteksi tidak akurat. (H=Hue, S=Saturation, V=Value/Brightness)</p>
+            
+            <!-- Mentah Sliders -->
+            <div class="slider-group">
+                <h4>Parameter Tahu Mentah (Putih/Krem)</h4>
+                <!-- Hue -->
+                <div class="slider-item">
+                    <label>Hue Min: <span id="val_raw_h_min">0</span></label>
+                    <input type="range" id="raw_h_min" min="0" max="180" value="0" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Hue Max: <span id="val_raw_h_max">180</span></label>
+                    <input type="range" id="raw_h_max" min="0" max="180" value="40" oninput="processImage()">
+                </div>
+                <!-- Saturation -->
+                <div class="slider-item">
+                    <label>Sat Min: <span id="val_raw_s_min">0</span></label>
+                    <input type="range" id="raw_s_min" min="0" max="255" value="0" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Sat Max: <span id="val_raw_s_max">60</span></label>
+                    <input type="range" id="raw_s_max" min="0" max="255" value="60" oninput="processImage()">
+                </div>
+                <!-- Value -->
+                <div class="slider-item">
+                    <label>Val Min: <span id="val_raw_v_min">160</span></label>
+                    <input type="range" id="raw_v_min" min="0" max="255" value="160" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Val Max: <span id="val_raw_v_max">255</span></label>
+                    <input type="range" id="raw_v_max" min="0" max="255" value="255" oninput="processImage()">
+                </div>
+            </div>
+
+            <!-- Goreng Sliders -->
+            <div class="slider-group">
+                <h4>Parameter Tahu Goreng (Coklat)</h4>
+                <!-- Hue -->
+                <div class="slider-item">
+                    <label>Hue Min: <span id="val_fried_h_min">10</span></label>
+                    <input type="range" id="fried_h_min" min="0" max="180" value="10" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Hue Max: <span id="val_fried_h_max">30</span></label>
+                    <input type="range" id="fried_h_max" min="0" max="180" value="30" oninput="processImage()">
+                </div>
+                <!-- Saturation -->
+                <div class="slider-item">
+                    <label>Sat Min: <span id="val_fried_s_min">100</span></label>
+                    <input type="range" id="fried_s_min" min="0" max="255" value="100" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Sat Max: <span id="val_fried_s_max">255</span></label>
+                    <input type="range" id="fried_s_max" min="0" max="255" value="255" oninput="processImage()">
+                </div>
+                <!-- Value -->
+                <div class="slider-item">
+                    <label>Val Min: <span id="val_fried_v_min">50</span></label>
+                    <input type="range" id="fried_v_min" min="0" max="255" value="50" oninput="processImage()">
+                </div>
+                <div class="slider-item">
+                    <label>Val Max: <span id="val_fried_v_max">200</span></label>
+                    <input type="range" id="fried_v_max" min="0" max="255" value="200" oninput="processImage()">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn-report" onclick="generateReport()">Generate Report (Download ZIP)</button>
+
+    <script type="text/javascript">
+        let imgElement = new Image();
+        let inputElement = document.getElementById('fileInput');
+        let canvasInput = document.getElementById('canvasInput');
+        let ctxInput = canvasInput.getContext('2d');
+        let isCvReady = false;
+
+        // Inisialisasi Placeholder Text
+        function drawPlaceholder(id, text) {
+            let c = document.getElementById(id);
+            let ctx = c.getContext('2d');
+            c.width = 320; c.height = 240;
+            ctx.fillStyle = "#eee"; ctx.fillRect(0,0,320,240);
+            ctx.fillStyle = "#999"; ctx.font = "20px Arial"; ctx.textAlign = "center";
+            ctx.fillText(text, 160, 120);
+        }
+
+        drawPlaceholder('canvasInput', 'Klik untuk Upload');
+        drawPlaceholder('canvasOutput', 'Menunggu Proses');
+        drawPlaceholder('canvasRaw', 'Filter Mentah');
+        drawPlaceholder('canvasFried', 'Filter Goreng');
+
+        // Cek OpenCV Ready
+        cv['onRuntimeInitialized'] = () => {
+            document.getElementById('status').innerText = 'OpenCV Siap';
+            document.getElementById('status').classList.add('ready');
+            isCvReady = true;
+        };
+
+        // Event Listeners
+        canvasInput.addEventListener('click', () => inputElement.click());
+        
+        inputElement.addEventListener('change', (e) => {
+            if(!isCvReady) { alert("OpenCV belum siap!"); return; }
+            imgElement.src = URL.createObjectURL(e.target.files[0]);
+        });
+
+        imgElement.onload = () => {
+            // Resize image to fit canvas logic generally (keep aspect ratio)
+            let maxDim = 500;
+            let scale = Math.min(maxDim / imgElement.width, maxDim / imgElement.height);
+            let w = imgElement.width * scale;
+            let h = imgElement.height * scale;
+
+            canvasInput.width = w; canvasInput.height = h;
+            ctxInput.drawImage(imgElement, 0, 0, w, h);
+            
+            document.getElementById('imgDim').innerText = `Ukuran Asli: ${imgElement.width}x${imgElement.height}px`;
+            
+            // Proses gambar pertama kali
+            processImage();
+        };
+
+        function updateSliderLabels() {
+            // Helper untuk update text label slider
+            const ids = [
+                'raw_h_min', 'raw_h_max', 'raw_s_min', 'raw_s_max', 'raw_v_min', 'raw_v_max',
+                'fried_h_min', 'fried_h_max', 'fried_s_min', 'fried_s_max', 'fried_v_min', 'fried_v_max'
+            ];
+            ids.forEach(id => {
+                document.getElementById('val_' + id).innerText = document.getElementById(id).value;
+            });
+        }
+
+        function processImage() {
+            if (!imgElement.src || !isCvReady) return;
+            updateSliderLabels();
+
+            let src = cv.imread('canvasInput');
+            let hsv = new cv.Mat();
+            let dst = src.clone(); // Gambar hasil untuk digambar kotak
+            
+            // 1. Konversi ke HSV
+            cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+            cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+
+            // 2. Ambil Nilai Slider Mentah
+            let r_h_min = parseInt(document.getElementById('raw_h_min').value);
+            let r_h_max = parseInt(document.getElementById('raw_h_max').value);
+            let r_s_min = parseInt(document.getElementById('raw_s_min').value);
+            let r_s_max = parseInt(document.getElementById('raw_s_max').value);
+            let r_v_min = parseInt(document.getElementById('raw_v_min').value);
+            let r_v_max = parseInt(document.getElementById('raw_v_max').value);
+
+            let lowerRaw = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [r_h_min, r_s_min, r_v_min, 0]);
+            let upperRaw = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [r_h_max, r_s_max, r_v_max, 255]);
+
+            // 3. Ambil Nilai Slider Goreng
+            let f_h_min = parseInt(document.getElementById('fried_h_min').value);
+            let f_h_max = parseInt(document.getElementById('fried_h_max').value);
+            let f_s_min = parseInt(document.getElementById('fried_s_min').value);
+            let f_s_max = parseInt(document.getElementById('fried_s_max').value);
+            let f_v_min = parseInt(document.getElementById('fried_v_min').value);
+            let f_v_max = parseInt(document.getElementById('fried_v_max').value);
+
+            let lowerFried = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [f_h_min, f_s_min, f_v_min, 0]);
+            let upperFried = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [f_h_max, f_s_max, f_v_max, 255]);
+
+            // 4. Thresholding (inRange)
+            let maskRaw = new cv.Mat();
+            let maskFried = new cv.Mat();
+            cv.inRange(hsv, lowerRaw, upperRaw, maskRaw);
+            cv.inRange(hsv, lowerFried, upperFried, maskFried);
+
+            // 5. Morphological Operations (Cleaning Noise) - Opsional tapi bagus
+            let M = cv.Mat.ones(5, 5, cv.CV_8U);
+            let anchor = new cv.Point(-1, -1);
+            cv.morphologyEx(maskRaw, maskRaw, cv.MORPH_OPEN, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+            cv.morphologyEx(maskFried, maskFried, cv.MORPH_OPEN, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+
+            // 6. Find Contours & Draw
+            let countRaw = 0;
+            let countFried = 0;
+
+            // Fungsi helper untuk menggambar kontur
+            function drawContoursCustom(mask, color, label, typeCounter) {
+                let contours = new cv.MatVector();
+                let hierarchy = new cv.Mat();
+                cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                
+                let count = 0;
+                for (let i = 0; i < contours.size(); ++i) {
+                    let cnt = contours.get(i);
+                    let area = cv.contourArea(cnt);
+                    
+                    // Filter noise kecil (area < 500 piksel diabaikan)
+                    if (area > 500) {
+                        let rect = cv.boundingRect(cnt);
+                        // Gambar Kotak
+                        let pt1 = new cv.Point(rect.x, rect.y);
+                        let pt2 = new cv.Point(rect.x + rect.width, rect.y + rect.height);
+                        cv.rectangle(dst, pt1, pt2, color, 2);
+                        
+                        // Tulis Label
+                        cv.putText(dst, label, new cv.Point(rect.x, rect.y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+                        count++;
+                    }
+                }
+                contours.delete(); hierarchy.delete();
+                return count;
+            }
+
+            // Proses Mentah (Warna Hijau untuk Bounding Box)
+            countRaw = drawContoursCustom(maskRaw, [0, 255, 0, 255], "Tahu Mentah", countRaw);
+            
+            // Proses Goreng (Warna Merah untuk Bounding Box)
+            countFried = drawContoursCustom(maskFried, [255, 0, 0, 255], "Tahu Goreng", countFried);
+
+            // 7. Tampilkan ke Canvas
+            cv.imshow('canvasOutput', dst);
+            cv.imshow('canvasRaw', maskRaw);
+            cv.imshow('canvasFried', maskFried);
+
+            // Update Text Info
+            document.getElementById('countResult').innerHTML = 
+                `<b>Deteksi:</b> ${countRaw} Tahu Mentah, ${countFried} Tahu Goreng. <br> Objek lain dianggap background/bukan tahu.`;
+
+            // Cleanup Memory
+            src.delete(); hsv.delete(); dst.delete(); 
+            lowerRaw.delete(); upperRaw.delete(); lowerFried.delete(); upperFried.delete();
+            maskRaw.delete(); maskFried.delete(); M.delete();
+        }
+
+        // ==========================
+        // GENERATE REPORT LOGIC
+        // ==========================
+        async function generateReport() {
+    if (!isCvReady || !imgElement.src) {
+        alert("Silakan upload gambar dan biarkan proses selesai terlebih dahulu.");
+        return;
+    }
+
+    try {
+        let zip = new JSZip();
+        let folder = zip.folder("laporan_deteksi_tahu");
+
+        // Ambil Data Gambar
+        let imgInput = document.getElementById('canvasInput').toDataURL('image/png').split(',')[1];
+        let imgRaw = document.getElementById('canvasRaw').toDataURL('image/png').split(',')[1];
+        let imgFried = document.getElementById('canvasFried').toDataURL('image/png').split(',')[1];
+        let imgOutput = document.getElementById('canvasOutput').toDataURL('image/png').split(',')[1];
+
+        // Masukkan gambar ke folder ZIP
+        folder.file("01_input_asli.png", imgInput, {base64: true});
+        folder.file("02_masking_mentah.png", imgRaw, {base64: true});
+        folder.file("03_masking_goreng.png", imgFried, {base64: true});
+        folder.file("04_hasil_akhir.png", imgOutput, {base64: true});
+
+        // HTML Content (Sama seperti sebelumnya)
+        // Kita beri nama index.html agar lebih dianggap 'standar' oleh OS
+        let htmlContent = `<!DOCTYPE html>
+        <html lang="id">
+        <head>
+            <meta charset="UTF-8">
+            <title>Laporan PCD</title>
+            <style>
+                body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+                .step { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+                img { max-width: 100%; border: 1px solid #333; margin-top: 10px; }
+                h2 { margin-top: 0; }
+            </style>
+        </head>
+        <body>
+            <h1>Laporan Analisis Citra Tahu</h1>
+            <p>Dibuat pada: ${new Date().toLocaleString()}</p>
+            
+            <div class="step">
+                <h2>1. Input</h2>
+                <img src="01_input_asli.png">
+            </div>
+            <div class="step">
+                <h2>2. Deteksi Mentah (HSV Filter)</h2>
+                <img src="02_masking_mentah.png">
+            </div>
+            <div class="step">
+                <h2>3. Deteksi Goreng (HSV Filter)</h2>
+                <img src="03_masking_goreng.png">
+            </div>
+            <div class="step">
+                <h2>4. Hasil Klasifikasi</h2>
+                <img src="04_hasil_akhir.png">
+            </div>
+        </body>
+        </html>`;
+
+        folder.file("index.html", htmlContent);
+
+        // --- SOLUSI MASALAH 1: SAVE AS DIALOG ---
+        const blob = await zip.generateAsync({type: "blob"});
+        
+        // Cek apakah browser mendukung 'showSaveFilePicker' (Chrome/Edge/Opera)
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'Laporan_Tahu.zip',
+                    types: [{
+                        description: 'ZIP Archive',
+                        accept: {'application/zip': ['.zip']},
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                return; // Sukses, keluar fungsi
+            } catch (err) {
+                // Jika user membatalkan (Cancel), jangan lakukan apa-apa
+                if (err.name !== 'AbortError') {
+                    console.error(err);
+                    alert("Gagal menyimpan file. Menggunakan cara download biasa.");
+                } else {
+                    return;
+                }
+            }
+        }
+
+        // --- FALLBACK (UNTUK FIREFOX ATAU JIKA API GAGAL) ---
+        // Ini akan tetap save ke Downloads jika setting browser user default
+        saveAs(blob, "Laporan_Tahu.zip");
+
+    } catch (e) {
+        console.error(e);
+        alert("Terjadi kesalahan saat membuat laporan.");
+    }
+}
+    </script>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCD Tahu: Advanced Control & Report</title>
+    
+    <!-- OpenCV.js, JSZip, FileSaver -->
+    <script src="https://docs.opencv.org/4.5.0/opencv.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        
+        h1 { margin: 0; color: var(--primary); }
+        .status { font-weight: bold; margin-bottom: 20px; font-size: 0.9em; }
+        .ready { color: green; } .loading { color: red; }
+
+        /* GRID SYSTEM */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .panel { background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+        canvas { max-width: 100%; border: 1px solid #ddd; background: #eee; cursor: crosshair; }
+        #canvasInput { cursor: pointer; border: 2px dashed #bbb; transition: 0.2s; }
+        #canvasInput:hover { background: #eef7fb; border-color: var(--accent); }
+
+        /* CONTROLS */
+        .controls { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .filter-container { display: flex; gap: 20px; flex-wrap: wrap; }
+        .filter-col { flex: 1; min-width: 320px; padding: 10px; border-radius: 5px; }
+        .filter-raw { border: 1px solid #a8e6cf; background: #f0fff4; }
+        .filter-fried { border: 1px solid #ffaaa5; background: #fff5f5; }
+        
+        h4 { margin: 0 0 10px 0; border-bottom: 2px solid rgba(0,0,0,0.1); padding-bottom: 5px; }
+
+        .control-row { display: flex; align-items: center; margin-bottom: 6px; font-size: 0.9rem; }
+        .control-row label { width: 70px; font-weight: 600; }
+        .control-row input[type=range] { flex: 1; margin: 0 10px; }
+        .control-row input[type=number] { width: 50px; padding: 3px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+
+        /* CONFIG STRING AREA */
+        .config-area { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
+        .config-box { display: flex; gap: 10px; align-items: center; }
+        textarea { flex: 1; height: 40px; font-family: monospace; font-size: 0.8rem; padding: 5px; border: 1px solid #ccc; border-radius: 4px; resize: none; white-space: nowrap; overflow-x: auto; }
+        
+        .btn { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; }
+        .btn-copy { background: #95a5a6; } .btn-copy:hover { background: #7f8c8d; }
+        .btn-paste { background: #e67e22; } .btn-paste:hover { background: #d35400; }
+        .btn-report { background: #27ae60; padding: 15px 30px; font-size: 1.1rem; width: 100%; margin-top: 20px; }
+        .btn-report:hover { background: #219150; }
+
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <h1>Sistem Deteksi Tahu (PCD)</h1>
+            <div id="status" class="status loading">Memuat OpenCV...</div>
+        </div>
+        <div style="text-align:right; font-size:0.85em; color:#666; max-width:400px;">
+            Input Manual tersedia. Gunakan Config String di bawah untuk menyimpan/memuat settingan.
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div class="grid">
+        <!-- Input -->
+        <div class="panel">
+            <h3>1. Input Gambar (Klik)</h3>
+            <canvas id="canvasInput"></canvas>
+        </div>
+        <!-- Output -->
+        <div class="panel">
+            <h3>4. Hasil Klasifikasi</h3>
+            <canvas id="canvasOutput"></canvas>
+            <div id="resText" style="font-weight:bold; margin-top:5px;">-</div>
+        </div>
+        <!-- Mentah -->
+        <div class="panel">
+            <h3>2. Filter Mentah (Putih/Krem)</h3>
+            <canvas id="canvasRaw"></canvas>
+        </div>
+        <!-- Goreng -->
+        <div class="panel">
+            <h3>3. Filter Goreng (Coklat)</h3>
+            <canvas id="canvasFried"></canvas>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="filter-container">
+            <div class="filter-col filter-raw">
+                <h4>Parameter Tahu Mentah</h4>
+                <div id="controls_raw"></div>
+            </div>
+            <div class="filter-col filter-fried">
+                <h4>Parameter Tahu Goreng</h4>
+                <div id="controls_fried"></div>
+            </div>
+        </div>
+
+        <div class="config-area">
+            <label style="font-weight:bold; display:block; margin-bottom:5px;">Config String (Simpan/Muat Settingan):</label>
+            <div class="config-box">
+                <textarea id="configStr" readonly placeholder="String konfigurasi akan muncul di sini..."></textarea>
+                <button class="btn btn-copy" onclick="copyConfig()">Copy</button>
+                <button class="btn btn-paste" onclick="pasteConfig()">Paste & Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-report" onclick="generateReport()">📄 Generate Report (ZIP)</button>
+
+    <script>
+        // --- 1. SETUP & INIT ---
+        let imgEl = new Image();
+        let cvReady = false;
+        
+        ['canvasInput','canvasOutput','canvasRaw','canvasFried'].forEach(id => {
+            let c = document.getElementById(id); c.width=320; c.height=240;
+            let x = c.getContext('2d'); x.fillStyle="#eee"; x.fillRect(0,0,320,240);
+            x.fillStyle="#aaa"; x.font="16px Arial"; x.textAlign="center"; 
+            x.fillText("Menunggu Gambar",160,120);
+        });
+
+        cv['onRuntimeInitialized'] = () => {
+            document.getElementById('status').innerText = "OpenCV Siap";
+            document.getElementById('status').className = "status ready";
+            cvReady = true;
+            generateControls(); 
+            updateConfigString(); 
+        };
+
+        // --- 2. DYNAMIC UI GENERATION ---
+        const params = {
+            raw:  { h_min:0, h_max:45, s_min:0, s_max:90, v_min:140, v_max:255 },
+            fried:{ h_min:5, h_max:35, s_min:90, s_max:255, v_min:50, v_max:220 }
+        };
+
+        function generateControls() {
+            function makeRow(prefix, key, label, maxVal) {
+                let val = params[prefix][key];
+                let id = `${prefix}_${key}`;
+                return `
+                <div class="control-row">
+                    <label>${label}</label>
+                    <input type="range" id="sl_${id}" min="0" max="${maxVal}" value="${val}" oninput="syncInput('${id}', this.value)">
+                    <input type="number" id="nb_${id}" min="0" max="${maxVal}" value="${val}" oninput="syncInput('${id}', this.value)">
+                </div>`;
+            }
+
+            let htmlRaw = "";
+            let htmlFried = "";
+            let keys = ['h_min','h_max','s_min','s_max','v_min','v_max'];
+            let labels = ['Hue Min','Hue Max','Sat Min','Sat Max','Val Min','Val Max'];
+            let maxs = [180, 180, 255, 255, 255, 255];
+
+            for(let i=0; i<6; i++) {
+                htmlRaw += makeRow('raw', keys[i], labels[i], maxs[i]);
+                htmlFried += makeRow('fried', keys[i], labels[i], maxs[i]);
+            }
+            
+            document.getElementById('controls_raw').innerHTML = htmlRaw;
+            document.getElementById('controls_fried').innerHTML = htmlFried;
+        }
+
+        // --- 3. SYNC LOGIC ---
+        function syncInput(id, value) {
+            value = parseInt(value);
+            document.getElementById('sl_' + id).value = value;
+            document.getElementById('nb_' + id).value = value;
+            
+            let parts = id.split('_'); 
+            let prefix = parts[0];
+            let key = parts[1] + '_' + parts[2];
+            params[prefix][key] = value;
+
+            updateConfigString();
+            process();
+        }
+
+        // --- 4. CONFIG STRING LOGIC ---
+        function updateConfigString() {
+            let str = JSON.stringify(params);
+            document.getElementById('configStr').value = str;
+        }
+
+        function copyConfig() {
+            let copyText = document.getElementById("configStr");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            alert("Config berhasil disalin!");
+        }
+
+        async function pasteConfig() {
+            try {
+                let text = "";
+                try { text = await navigator.clipboard.readText(); } catch (err) { text = document.getElementById('configStr').value; }
+
+                if (!text) { alert("Clipboard kosong."); return; }
+                let newParams = JSON.parse(text);
+                if (!newParams.raw || !newParams.fried) throw new Error("Format Config Salah");
+
+                params.raw = newParams.raw;
+                params.fried = newParams.fried;
+
+                for (let type of ['raw', 'fried']) {
+                    for (let k in params[type]) {
+                        let id = `${type}_${k}`;
+                        let val = params[type][k];
+                        if(document.getElementById('sl_' + id)) {
+                            document.getElementById('sl_' + id).value = val;
+                            document.getElementById('nb_' + id).value = val;
+                        }
+                    }
+                }
+                document.getElementById('configStr').value = JSON.stringify(params);
+                process(); 
+                alert("Settingan berhasil diterapkan!");
+            } catch (e) { alert("Gagal memuat config: " + e.message); }
+        }
+
+        // --- 5. IMAGE HANDLING ---
+        document.getElementById('canvasInput').onclick = () => document.getElementById('fileInput').click();
+        document.getElementById('fileInput').onchange = (e) => {
+            if(e.target.files[0]) imgEl.src = URL.createObjectURL(e.target.files[0]);
+        };
+
+        imgEl.onload = () => {
+            if(!cvReady) return;
+            let c = document.getElementById('canvasInput');
+            let ctx = c.getContext('2d');
+            let max = 500;
+            let scale = Math.min(max/imgEl.width, max/imgEl.height);
+            c.width = imgEl.width * scale; c.height = imgEl.height * scale;
+            ctx.drawImage(imgEl,0,0,c.width,c.height);
+            process();
+        };
+
+        // --- 6. CORE PROCESSING (PCD) ---
+        function process() {
+            if(!imgEl.src || !cvReady) return;
+
+            let src = cv.imread('canvasInput');
+            let hsv = new cv.Mat();
+            let dst = src.clone();
+
+            cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+            cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+
+            let pR = params.raw;
+            let pF = params.fried;
+
+            let lowerRaw = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [pR.h_min, pR.s_min, pR.v_min, 0]);
+            let upperRaw = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [pR.h_max, pR.s_max, pR.v_max, 255]);
+            let lowerFried = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [pF.h_min, pF.s_min, pF.v_min, 0]);
+            let upperFried = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [pF.h_max, pF.s_max, pF.v_max, 255]);
+
+            let maskRaw = new cv.Mat();
+            let maskFried = new cv.Mat();
+
+            cv.inRange(hsv, lowerRaw, upperRaw, maskRaw);
+            cv.inRange(hsv, lowerFried, upperFried, maskFried);
+
+            let M = cv.Mat.ones(3,3, cv.CV_8U);
+            cv.morphologyEx(maskRaw, maskRaw, cv.MORPH_OPEN, M);
+            cv.morphologyEx(maskFried, maskFried, cv.MORPH_OPEN, M);
+
+            let cntRaw = drawCnt(maskRaw, dst, [0,255,0,255], "Mentah");
+            let cntFried = drawCnt(maskFried, dst, [255,0,0,255], "Goreng");
+
+            cv.imshow('canvasOutput', dst);
+            cv.imshow('canvasRaw', maskRaw);
+            cv.imshow('canvasFried', maskFried);
+
+            document.getElementById('resText').innerHTML = 
+                `<span style="color:green">Mentah: ${cntRaw}</span> | <span style="color:red">Goreng: ${cntFried}</span>`;
+
+            src.delete(); hsv.delete(); dst.delete();
+            lowerRaw.delete(); upperRaw.delete(); lowerFried.delete(); upperFried.delete();
+            maskRaw.delete(); maskFried.delete(); M.delete();
+        }
+
+        function drawCnt(mask, dest, color, label) {
+            let contours = new cv.MatVector();
+            let hier = new cv.Mat();
+            cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            let count = 0;
+            for(let i=0; i<contours.size(); i++) {
+                let cnt = contours.get(i);
+                if(cv.contourArea(cnt) > 400) {
+                    let r = cv.boundingRect(cnt);
+                    cv.rectangle(dest, new cv.Point(r.x,r.y), new cv.Point(r.x+r.width, r.y+r.height), color, 2);
+                    cv.putText(dest, label, new cv.Point(r.x, r.y-5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+                    count++;
+                }
+            }
+            contours.delete(); hier.delete();
+            return count;
+        }
+
+        // --- 7. REPORT GENERATOR (MENGGUNAKAN LOGIKA AMAN DARI index.html) ---
+        async function generateReport() {
+            if (!cvReady || !imgEl.src) {
+                alert("Upload gambar dulu!");
+                return;
+            }
+
+            try {
+                let zip = new JSZip();
+                // Buat folder agar rapi
+                let folder = zip.folder("laporan_deteksi_tahu");
+
+                // --- LOGIKA UTAMA KEAMANAN ---
+                // 1. Ambil DataURL (Base64)
+                // 2. Split koma untuk buang header "data:image..."
+                // 3. Simpan ke ZIP dengan {base64: true}
+                // JSZip akan mengkonversinya menjadi biner secara internal.
+                
+                let imgInput = document.getElementById('canvasInput').toDataURL('image/png').split(',')[1];
+                let imgRaw = document.getElementById('canvasRaw').toDataURL('image/png').split(',')[1];
+                let imgFried = document.getElementById('canvasFried').toDataURL('image/png').split(',')[1];
+                let imgOutput = document.getElementById('canvasOutput').toDataURL('image/png').split(',')[1];
+
+                // Simpan gambar fisik ke dalam ZIP
+                folder.file("01_input_asli.png", imgInput, {base64: true});
+                folder.file("02_masking_mentah.png", imgRaw, {base64: true});
+                folder.file("03_masking_goreng.png", imgFried, {base64: true});
+                folder.file("04_hasil_akhir.png", imgOutput, {base64: true});
+
+                // --- GENERATE HTML YANG BERSIH (TANPA KODE BINER) ---
+                let date = new Date().toLocaleString();
+                let pR = params.raw;
+                let pF = params.fried;
+
+                // Perhatikan: src gambar hanya menunjuk nama file, bukan data base64
+                let htmlContent = `<!DOCTYPE html>
+                <html lang="id">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Laporan PCD - Deteksi Tahu</title>
+                    <style>
+                        body { font-family: 'Segoe UI', sans-serif; padding: 30px; max-width: 800px; margin: auto; background: #fff; color: #333; }
+                        h1 { border-bottom: 2px solid #2c3e50; padding-bottom: 10px; color: #2c3e50; }
+                        .step { border: 1px solid #ddd; padding: 20px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+                        img { max-width: 100%; border: 1px solid #ccc; margin-top: 15px; display: block; }
+                        h2 { margin-top: 0; color: #3498db; font-size: 1.2rem; }
+                        .param-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+                        .param-table th, .param-table td { border: 1px solid #eee; padding: 8px 12px; text-align: left; }
+                        .param-table th { background: #f8f9fa; font-weight: 600; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Laporan Analisis Citra Tahu</h1>
+                    <p><strong>Dibuat pada:</strong> ${date}</p>
+                    
+                    <div class="step">
+                        <h2>1. Input Citra Asli</h2>
+                        <img src="01_input_asli.png" alt="Input">
+                    </div>
+
+                    <div class="step">
+                        <h2>2. Filter Tahu Mentah (Putih/Krem)</h2>
+                        <p>Parameter HSV yang digunakan:</p>
+                        <table class="param-table">
+                            <tr><th>Parameter</th><th>Range Nilai</th></tr>
+                            <tr><td>Hue</td><td>${pR.h_min} - ${pR.h_max}</td></tr>
+                            <tr><td>Saturation</td><td>${pR.s_min} - ${pR.s_max}</td></tr>
+                            <tr><td>Value</td><td>${pR.v_min} - ${pR.v_max}</td></tr>
+                        </table>
+                        <img src="02_masking_mentah.png" alt="Mask Mentah">
+                    </div>
+
+                    <div class="step">
+                        <h2>3. Filter Tahu Goreng (Coklat)</h2>
+                        <p>Parameter HSV yang digunakan:</p>
+                        <table class="param-table">
+                            <tr><th>Parameter</th><th>Range Nilai</th></tr>
+                            <tr><td>Hue</td><td>${pF.h_min} - ${pF.h_max}</td></tr>
+                            <tr><td>Saturation</td><td>${pF.s_min} - ${pF.s_max}</td></tr>
+                            <tr><td>Value</td><td>${pF.v_min} - ${pF.v_max}</td></tr>
+                        </table>
+                        <img src="03_masking_goreng.png" alt="Mask Goreng">
+                    </div>
+
+                    <div class="step">
+                        <h2>4. Hasil Klasifikasi & Counting</h2>
+                        <img src="04_hasil_akhir.png" alt="Output">
+                    </div>
+                </body>
+                </html>`;
+
+                folder.file("index.html", htmlContent);
+
+                // Generate dan Download ZIP
+                const blob = await zip.generateAsync({type: "blob"});
+                saveAs(blob, "Laporan_Tahu_Lengkap.zip");
+
+            } catch (e) {
+                console.error(e);
+                alert("Terjadi kesalahan saat membuat laporan: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
