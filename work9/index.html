@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text to Hierarchy Tree Converter (Interactive)</title>
+    <title>Text to Hierarchy Tree Converter (Smart Crop)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
@@ -125,7 +125,7 @@
 
         /* --- POPUP MODAL STYLES --- */
         #nodeModal {
-            display: none; /* Hidden by default */
+            display: none;
             position: fixed;
             z-index: 1000;
             left: 0;
@@ -195,8 +195,8 @@
             font-size: 0.9em;
         }
 
-        .btn-add-child { background-color: #2196F3; } /* Biru untuk add */
-        .btn-remove-child { background-color: #FF9800; } /* Orange untuk remove */
+        .btn-add-child { background-color: #2196F3; } 
+        .btn-remove-child { background-color: #FF9800; } 
         
         .btn-close {
             margin-top: 15px;
@@ -249,7 +249,6 @@
                 
                 <label>Kelola Child:</label>
                 <div class="child-controls">
-                    <!-- Tombol dinamis diisi via JS -->
                     <button id="btnLeft" class="child-btn" onclick="toggleLeft()">⬅️ Kiri</button>
                     <button id="btnRight" class="child-btn" onclick="toggleRight()">Kanan ➡️</button>
                 </div>
@@ -265,17 +264,17 @@
                 this.name = name;
                 this.left = left;
                 this.right = right;
-                this.parent = null; // Tambahan untuk mempermudah navigasi
+                this.parent = null; 
                 this.x = 0;
                 this.y = 0;
             }
         }
 
         let rootNode = null;
-        let selectedNode = null; // Node yang sedang diedit
+        let selectedNode = null; 
         const LEVEL_HEIGHT = 80;
 
-        // --- 1. Parser Logic ---
+        // --- Parser Logic ---
 
         function splitContent(str) {
             let depth = 0;
@@ -325,7 +324,6 @@
             return node;
         }
 
-        // Helper untuk set parent pointers agar mudah menghapus
         function addParentPointers(node, parent = null) {
             if (!node) return;
             node.parent = parent;
@@ -333,7 +331,7 @@
             addParentPointers(node.right, node);
         }
 
-        // --- 2. Layout & Render Logic ---
+        // --- Layout & Render Logic ---
 
         function getDepth(node) {
             if (!node) return 0;
@@ -349,26 +347,19 @@
         }
 
         function generateTree(skipParse = false) {
-            // Jika skipParse true, kita menggunakan rootNode yang sudah dimodifikasi di memori
-            // Jika false, kita parse ulang dari Textarea
             if (!skipParse) {
                 const input = document.getElementById('inputData').value;
                 try {
                     rootNode = parseString(input);
                     if (!rootNode) throw new Error("Root is null");
                 } catch (e) {
-                    // alert("Tree kosong atau error format.");
-                    // Reset canvas
                     document.getElementById('tree-canvas').innerHTML = '';
                     rootNode = null;
                     return;
                 }
             }
 
-            // Selalu update parent pointers
             addParentPointers(rootNode);
-
-            // Selalu update textarea agar sinkron dengan visual
             updateInputFromTree();
 
             const canvas = document.getElementById('tree-canvas');
@@ -417,9 +408,8 @@
             div.style.top = (node.y - 20) + 'px';
             div.innerText = node.name;
             
-            // Single Click untuk membuka Settings
             div.onclick = function(e) {
-                e.stopPropagation(); // Mencegah bubbling
+                e.stopPropagation();
                 openModal(node);
             };
 
@@ -428,7 +418,7 @@
             drawNodesRecursive(node.right, container);
         }
 
-        // --- 3. MODAL & INTERACTION LOGIC ---
+        // --- MODAL & INTERACTION LOGIC ---
 
         const modal = document.getElementById('nodeModal');
         const nameInput = document.getElementById('nodeNameInput');
@@ -444,7 +434,6 @@
         }
 
         function updateModalButtons() {
-            // Cek kondisi kiri
             if (selectedNode.left) {
                 btnLeft.innerHTML = "⬅️ Hapus Kiri";
                 btnLeft.className = "child-btn btn-remove-child";
@@ -455,7 +444,6 @@
                 btnLeft.title = "Generate Node Baru";
             }
 
-            // Cek kondisi kanan
             if (selectedNode.right) {
                 btnRight.innerHTML = "Hapus Kanan ➡️";
                 btnRight.className = "child-btn btn-remove-child";
@@ -468,54 +456,42 @@
         }
 
         function closeModal() {
-            // Simpan nama saat tutup
             if (selectedNode) {
                 const newName = nameInput.value.trim();
                 if (newName) selectedNode.name = newName;
             }
             modal.style.display = 'none';
             selectedNode = null;
-            generateTree(true); // Re-render from memory
+            generateTree(true); 
         }
 
-        // --- LOGIC TOMBOL MODAL ---
-
-        // 1. Hapus Node (Tempat Sampah)
         function deleteCurrentNode() {
             if (!selectedNode) return;
-            
             const confirmDelete = confirm(`Hapus node "${selectedNode.name}" beserta semua anaknya?`);
             if (!confirmDelete) return;
 
             if (selectedNode.parent) {
-                // Putuskan hubungan dari parent
                 if (selectedNode.parent.left === selectedNode) {
                     selectedNode.parent.left = null;
                 } else if (selectedNode.parent.right === selectedNode) {
                     selectedNode.parent.right = null;
                 }
             } else {
-                // Jika root dihapus
                 rootNode = null;
             }
-
             modal.style.display = 'none';
             selectedNode = null;
             generateTree(true);
         }
 
-        // 2. Toggle Kiri
         function toggleLeft() {
             if (!selectedNode) return;
-            
             if (selectedNode.left) {
-                // Kalau ada -> Ubah jadi Null
-                if(confirm("Ubah child kiri menjadi Null? (Subtree akan hilang)")) {
+                if(confirm("Ubah child kiri menjadi Null?")) {
                     selectedNode.left = null;
                     updateModalButtons();
                 }
             } else {
-                // Kalau null -> Generate Node Baru
                 const name = prompt("Masukkan nama untuk Node Kiri baru:", "NewNode");
                 if (name) {
                     selectedNode.left = new TreeNode(name);
@@ -525,18 +501,14 @@
             }
         }
 
-        // 3. Toggle Kanan
         function toggleRight() {
             if (!selectedNode) return;
-
             if (selectedNode.right) {
-                // Kalau ada -> Ubah jadi Null
-                if(confirm("Ubah child kanan menjadi Null? (Subtree akan hilang)")) {
+                if(confirm("Ubah child kanan menjadi Null?")) {
                     selectedNode.right = null;
                     updateModalButtons();
                 }
             } else {
-                // Kalau null -> Generate Node Baru
                 const name = prompt("Masukkan nama untuk Node Kanan baru:", "NewNode");
                 if (name) {
                     selectedNode.right = new TreeNode(name);
@@ -546,12 +518,11 @@
             }
         }
         
-        // Handle input Enter di nama node
         nameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') closeModal();
         });
 
-        // --- 4. Helper & Others ---
+        // --- Utilities ---
 
         function updateInputFromTree() {
             const str = serializeTree(rootNode);
@@ -589,9 +560,54 @@
             }
         }
 
+        // --- NEW DOWNLOAD LOGIC ---
+
         function downloadTree() {
-            const element = document.getElementById('tree-wrapper');
-            html2canvas(element, { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
+            const container = document.getElementById('tree-canvas');
+            const nodes = document.querySelectorAll('.node');
+            
+            if (nodes.length === 0) {
+                alert("Tidak ada tree untuk didownload.");
+                return;
+            }
+
+            // 1. Hitung Bounding Box dari seluruh elemen Node yang ada
+            let minX = Infinity, minY = Infinity;
+            let maxX = -Infinity, maxY = -Infinity;
+
+            nodes.forEach(node => {
+                // style.left/top diset sebagai string '123px', kita parse ke float
+                // style.left di program ini adalah posisi pojok kiri node (x - 40)
+                const left = parseFloat(node.style.left);
+                const top = parseFloat(node.style.top);
+                const width = node.offsetWidth;   // Harusnya 80
+                const height = node.offsetHeight; // Harusnya 40
+
+                if (left < minX) minX = left;
+                if (top < minY) minY = top;
+                
+                if ((left + width) > maxX) maxX = left + width;
+                if ((top + height) > maxY) maxY = top + height;
+            });
+
+            // 2. Tambahkan Margin 10px dari sisi terluar
+            const margin = 10;
+            const cropX = minX - margin;
+            const cropY = minY - margin;
+            const cropWidth = (maxX - minX) + (margin * 2);
+            const cropHeight = (maxY - minY) + (margin * 2);
+
+            // 3. Download hanya area yang dihitung
+            html2canvas(container, {
+                backgroundColor: "#ffffff",
+                scale: 2, // Biar tidak buram
+                x: cropX,
+                y: cropY,
+                width: cropWidth,
+                height: cropHeight,
+                scrollX: 0,
+                scrollY: 0
+            }).then(canvas => {
                 const link = document.createElement('a');
                 link.download = 'hierarchy-tree.png';
                 link.href = canvas.toDataURL("image/png");
@@ -599,11 +615,8 @@
             });
         }
 
-        // Klik luar modal untuk menutup
         window.onclick = function(event) {
-            if (event.target == modal) {
-                closeModal();
-            }
+            if (event.target == modal) closeModal();
         }
 
         window.onload = function() {
