@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Peluang Real-Time</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --text-color: #333;
+            --card-bg: #ffffff;
+            --highlight: #007bff;
+            --highlight-hover: #0056b3;
+            --danger: #dc3545;
+            --border-color: #ddd;
+            --shadow: 0 2px 8px rgba(0,0,0,0.1);
+            --modal-bg: rgba(255, 255, 255, 0.95);
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --card-bg: #1e1e1e;
+            --highlight: #4dabf5;
+            --highlight-hover: #2196f3;
+            --danger: #ff5252;
+            --border-color: #333;
+            --shadow: 0 2px 8px rgba(0,0,0,0.5);
+            --modal-bg: rgba(30, 30, 30, 0.95);
+        }
+
+        * { box-sizing: border-box; transition: background-color 0.3s, color 0.3s; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+
+        /* --- KOTAK ATAS (DISPLAY) --- */
+        .top-box {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            border: 1px solid var(--border-color);
+        }
+
+        .top-box h2 { margin: 0 0 10px 0; font-size: 1.2rem; opacity: 0.8; }
+        .result-display { font-size: 2.5rem; font-weight: bold; color: var(--highlight); word-break: break-all; }
+
+        /* Overlay Stats (Pie Chart & List) */
+        .stats-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--modal-bg);
+            border-radius: 12px;
+            display: flex;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            padding: 10px;
+            gap: 10px;
+        }
+
+        /* Show overlay on hover or active (touch) */
+        .top-box:active .stats-overlay, 
+        .top-box:hover .stats-overlay {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .stats-list { flex: 1; overflow-y: auto; text-align: left; font-size: 0.9rem; padding-right: 5px; }
+        .stats-chart { flex: 1; display: flex; align-items: center; justify-content: center; }
+        .stats-item { display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 2px; }
+        
+        /* --- CONTROLLER --- */
+        .controller {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 600px;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 10px 20px;
+            border-radius: 50px;
+            box-shadow: var(--shadow);
+        }
+
+        select, button {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        button.add-btn { background: var(--highlight); color: white; border: none; font-weight: bold; }
+        button.add-btn:hover { background: var(--highlight-hover); }
+        
+        .theme-toggle { background: transparent; border: none; font-size: 1.5rem; padding: 0; }
+
+        /* --- KOTAK BAWAH (CARDS) --- */
+        .cards-container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: var(--shadow);
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            border: 1px solid var(--border-color);
+        }
+
+        .card-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .card-title { font-weight: bold; cursor: text; border-bottom: 1px dashed var(--border-color); }
+        .card-title:focus { outline: none; border-bottom: 1px solid var(--highlight); }
+        
+        .trash-btn {
+            background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.2rem;
+        }
+
+        .card-body {
+            display: flex;
+            width: 100%;
+            gap: 15px;
+            align-items: center;
+        }
+
+        /* Bagian Kiri (Hasil Per Card) */
+        .card-result {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-color);
+            border-radius: 8px;
+            padding: 10px;
+            min-width: 80px;
+        }
+        .card-result span { font-size: 0.8rem; opacity: 0.7; }
+        .card-result strong { font-size: 1.1rem; color: var(--highlight); }
+
+        /* Bagian Tengah (Inputs) */
+        .card-inputs {
+            flex: 3;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .input-group { display: flex; flex-direction: column; }
+        .input-group label { font-size: 0.75rem; margin-bottom: 3px; opacity: 0.8; }
+        .input-group input { 
+            padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); 
+            background: var(--bg-color); color: var(--text-color); width: 100%;
+        }
+
+        .fraction-input { display: flex; align-items: center; gap: 5px; }
+        .fraction-input span { font-size: 1.2rem; }
+
+        @media (max-width: 480px) {
+            .card-body { flex-direction: column; }
+            .card-result { width: 100%; margin-bottom: 10px; }
+            .stats-overlay { flex-direction: column; }
+            .stats-chart { min-height: 150px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- KOTAK ATAS -->
+    <div class="top-box" id="topBox" title="Tahan untuk melihat detail">
+        <h2 id="modeLabel">Peluang Campuran</h2>
+        <div class="result-display" id="finalResult">0.00000000%</div>
+        <div style="font-size: 0.8rem; margin-top:5px; opacity:0.6;">(Hold/Hover for details)</div>
+
+        <!-- Overlay Statistik -->
+        <div class="stats-overlay">
+            <div class="stats-list" id="statsList">
+                <!-- List items injected by JS -->
+            </div>
+            <div class="stats-chart" id="statsChart">
+                <!-- SVG Chart injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTROLLER -->
+    <div class="controller">
+        <select id="logicSelector" onchange="calculateAll()">
+            <option value="OR">Logika ATAU (Salah satu terjadi)</option>
+            <option value="AND">Logika DAN (Semua terjadi)</option>
+            <option value="AVG">Rata-rata Peluang</option>
+        </select>
+
+        <button class="add-btn" onclick="addCard()">+ Variable</button>
+
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+            🌗
+        </button>
+    </div>
+
+    <!-- KOTAK BAWAH -->
+    <div class="cards-container" id="cardsContainer">
+        <!-- Cards injected by JS -->
+    </div>
+
+    <script>
+        // --- DATA & STATE ---
+        let cards = [];
+        let cardCounter = 1;
+        const savedData = localStorage.getItem('probCalcData');
+
+        // --- INIT ---
+        if (savedData) {
+            const parsed = JSON.parse(savedData);
+            cards = parsed.cards || [];
+            cardCounter = parsed.counter || 1;
+            document.getElementById('logicSelector').value = parsed.logic || 'OR';
+            if (parsed.theme === 'dark') document.body.setAttribute('data-theme', 'dark');
+        } else {
+            // Default first card
+            addCard(false); 
+        }
+
+        // --- RENDER FUNCTION ---
+        function renderCards() {
+            const container = document.getElementById('cardsContainer');
+            container.innerHTML = '';
+
+            cards.forEach((card, index) => {
+                const el = document.createElement('div');
+                el.className = 'card';
+                el.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-title" contenteditable="true" onblur="updateName(${index}, this.innerText)">${card.name}</span>
+                        <button class="trash-btn" onclick="removeCard(${index})">🗑️</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-result">
+                            <span>Peluang:</span>
+                            <strong id="res-${index}">0%</strong>
+                        </div>
+                        <div class="card-inputs">
+                            <!-- Peluang Dasar (x per y) -->
+                            <div class="input-group" style="grid-column: span 2;">
+                                <label>Peluang Dasar (x per y)</label>
+                                <div class="fraction-input">
+                                    <input type="number" value="${card.x}" placeholder="x" min="0" oninput="updateCard(${index}, 'x', this.value)">
+                                    <span>/</span>
+                                    <input type="number" value="${card.y}" placeholder="y" min="1" oninput="updateCard(${index}, 'y', this.value)">
+                                </div>
+                            </div>
+                            
+                            <!-- Putaran (j) -->
+                            <div class="input-group">
+                                <label>Diputar (j)</label>
+                                <input type="number" value="${card.j}" placeholder="Total" min="1" oninput="updateCard(${index}, 'j', this.value)">
+                            </div>
+
+                            <!-- Target (z) -->
+                            <div class="input-group">
+                                <label>Target (z)</label>
+                                <input type="number" value="${card.z}" placeholder="Min. x" min="1" oninput="updateCard(${index}, 'z', this.value)">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+            calculateAll();
+        }
+
+        // --- LOGIC FUNCTIONS ---
+        
+        // Faktorial sederhana (untuk n kecil)
+        function factorial(n) {
+            if (n < 0) return -1;
+            if (n == 0) return 1;
+            let res = 1;
+            for(let i=1; i<=n; i++) res *= i;
+            return res;
+        }
+
+        // Kombinasi nCr
+        function combinations(n, r) {
+            if (n < r) return 0;
+            // Gunakan pendekatan logaritma untuk angka besar agar tidak infinity
+            if (n > 100) { 
+                // Pendekatan simpel atau peringatan. Untuk web JS real-time, kita batasi loop atau pakai library bigmath.
+                // Di sini kita gunakan loop product untuk efisiensi nCr = product(n-i+1 / i)
+                let res = 1;
+                for (let i = 1; i <= r; i++) {
+                    res = res * (n - i + 1) / i;
+                }
+                return res;
+            }
+            return factorial(n) / (factorial(r) * factorial(n - r));
+        }
+
+        // Hitung Probabilitas Binomial Kumulatif P(X >= z)
+        // p = peluang sukses (x/y), n = total trial (j), k = target sukses (z)
+        function calculateBinomial(p, n, k) {
+            if (p < 0 || p > 1) return 0;
+            if (k > n) return 0; // Target lebih besar dari total putaran
+            
+            // Jika k = 0, peluang pasti 100% (setidaknya 0 sukses)
+            if (k <= 0) return 1;
+
+            // Optimasi: Jika user mengharapkan target = 1 (setidaknya 1 sukses)
+            // Rumus: 1 - (1-p)^n
+            if (k == 1) {
+                return 1 - Math.pow(1 - p, n);
+            }
+
+            // Jika k = n (Semua harus sukses)
+            if (k == n) {
+                return Math.pow(p, n);
+            }
+
+            // Perhitungan Sum (Cumulative)
+            let prob = 0;
+            
+            // Batasi loop untuk performa
+            if (n > 2000) {
+                // Untuk n sangat besar, gunakan aproksimasi Normal (Gaussian)
+                // Mean = np, SD = sqrt(np(1-p))
+                let mean = n * p;
+                let sd = Math.sqrt(n * p * (1 - p));
+                // Z-score untuk k-0.5 (continuity correction)
+                let zScore = (k - 0.5 - mean) / sd;
+                // Aproksimasi error function (simple version)
+                return 0.5 * (1 - erf(zScore / Math.sqrt(2))); // P(X >= k) is area to right
+            }
+
+            for (let i = k; i <= n; i++) {
+                // nCr * p^i * (1-p)^(n-i)
+                let combo = 1;
+                // Hitung nCr secara iteratif untuk menghindari faktorial raksasa
+                for (let j = 0; j < i; j++) {
+                    combo = combo * (n - j) / (j + 1);
+                }
+                
+                prob += combo * Math.pow(p, i) * Math.pow(1 - p, n - i);
+            }
+            return prob;
+        }
+
+        // Error function aproksimasi untuk n besar
+        function erf(x) {
+            // constants
+            var a1 =  0.254829592;
+            var a2 = -0.284496736;
+            var a3 =  1.421413741;
+            var a4 = -1.453152027;
+            var a5 =  1.061405429;
+            var p  =  0.3275911;
+            // Save the sign of x
+            var sign = 1;
+            if (x < 0) sign = -1;
+            x = Math.abs(x);
+            // A&S formula 7.1.26
+            var t = 1.0/(1.0 + p*x);
+            var y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-x*x);
+            return sign*y;
+        }
+
+        function calculateAll() {
+            const logic = document.getElementById('logicSelector').value;
+            let totalProb = 0;
+            let probs = []; // Array menyimpan objek {name, prob}
+
+            // 1. Hitung per card
+            cards.forEach((card, idx) => {
+                let p = (card.x && card.y) ? (parseFloat(card.x) / parseFloat(card.y)) : 0;
+                let n = parseInt(card.j) || 0;
+                let z = card.z === "" ? parseInt(card.x) : parseInt(card.z); // Default z = x if empty (based on prompt intent interpretation? Or user said "expected x appears y times"? The prompt correction: "z merupakan kemungkinan yang diharapkan").
+                // Koreksi logic: "z" di input UI adalah target sukses.
+                // Jika user kosongkan z, anggap dia mau sukses sebanyak "x" kali? Agak aneh.
+                // Mari kita default ke 1 jika kosong agar lebih masuk akal, atau sama dengan x (jumlah numerator).
+                if (!card.z && card.z !== 0) z = 1; // Default min 1 sukses
+
+                let result = calculateBinomial(p, n, z);
+                
+                // Simpan hasil individu
+                card.currentProb = result;
+                document.getElementById(`res-${idx}`).innerText = (result * 100).toFixed(4) + '%';
+                
+                probs.push({ name: card.name, val: result, id: idx });
+            });
+
+            // 2. Hitung Total (Top Box)
+            if (probs.length > 0) {
+                if (logic === 'OR') {
+                    // P(A U B) = 1 - P(A' n B') = 1 - ((1-P1)*(1-P2)...)
+                    let failProb = 1;
+                    probs.forEach(p => failProb *= (1 - p.val));
+                    totalProb = 1 - failProb;
+                } else if (logic === 'AND') {
+                    // P(A n B) = P1 * P2 ...
+                    totalProb = 1;
+                    probs.forEach(p => totalProb *= p.val);
+                } else if (logic === 'AVG') {
+                    let sum = 0;
+                    probs.forEach(p => sum += p.val);
+                    totalProb = sum / probs.length;
+                }
+            }
+
+            document.getElementById('finalResult').innerText = (totalProb * 100).toFixed(8) + '%';
+            
+            // 3. Update Overlay Stats
+            updateStatsOverlay(probs);
+
+            saveState();
+        }
+
+        function updateStatsOverlay(probs) {
+            // Sort by Weight (Highest probability first)
+            const sorted = [...probs].sort((a, b) => b.val - a.val);
+            
+            // Render List
+            const listEl = document.getElementById('statsList');
+            listEl.innerHTML = '<strong>Bobot Peluang (Terbesar):</strong><br><br>';
+            sorted.forEach(p => {
+                listEl.innerHTML += `
+                    <div class="stats-item">
+                        <span>${p.name}</span>
+                        <span>${(p.val * 100).toFixed(4)}%</span>
+                    </div>
+                `;
+            });
+
+            // Render Pie Chart (SVG)
+            // Normalisasi nilai agar total 100% untuk chart (visualisasi kontribusi relatif)
+            let totalVal = probs.reduce((sum, p) => sum + p.val, 0);
+            if (totalVal === 0) totalVal = 1; // prevent div by zero
+
+            let accumPercent = 0;
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+            
+            // Kita harus membuat potongan pie (path)
+            // Fungsi helper membuat path slice
+            function getCoordinatesForPercent(percent) {
+                const x = Math.cos(2 * Math.PI * percent);
+                const y = Math.sin(2 * Math.PI * percent);
+                return [x, y];
+            }
+
+            let svgContent = `<svg viewBox="-1 -1 2 2" style="transform: rotate(-90deg); width: 120px; height: 120px;">`;
+            
+            probs.forEach((p, i) => {
+                const percent = p.val / totalVal;
+                if (percent === 0) return;
+
+                const start = getCoordinatesForPercent(accumPercent);
+                accumPercent += percent;
+                const end = getCoordinatesForPercent(accumPercent);
+                
+                const largeArcFlag = percent > 0.5 ? 1 : 0;
+                
+                // Color logic: ensure distinct, neighbors different
+                const color = colors[i % colors.length];
+
+                // Jika hanya 1 item, buat lingkaran penuh
+                if (probs.length === 1 || percent > 0.9999) {
+                    svgContent += `<circle cx="0" cy="0" r="1" fill="${color}" />`;
+                } else {
+                    const pathData = [
+                        `M 0 0`,
+                        `L ${start[0]} ${start[1]}`,
+                        `A 1 1 0 ${largeArcFlag} 1 ${end[0]} ${end[1]}`,
+                        `L 0 0`,
+                    ].join(' ');
+                    svgContent += `<path d="${pathData}" fill="${color}" stroke="var(--modal-bg)" stroke-width="0.02"/>`;
+                }
+            });
+            svgContent += `</svg>`;
+            document.getElementById('statsChart').innerHTML = svgContent;
+        }
+
+
+        // --- CRUD OPERATIONS ---
+        
+        function addCard(save = true) {
+            cards.push({
+                name: `card-${cardCounter++}`,
+                x: 1, // Default numerator
+                y: 100, // Default denominator
+                j: 10, // Default spins
+                z: 1,  // Default target
+                currentProb: 0
+            });
+            renderCards();
+            if(save) saveState();
+        }
+
+        function removeCard(index) {
+            const cardName = cards[index].name;
+            if (confirm(`Apakah Anda yakin ingin menghapus "${cardName}"?`)) {
+                cards.splice(index, 1);
+                renderCards();
+                saveState();
+            }
+        }
+
+        function updateName(index, newName) {
+            cards[index].name = newName;
+            calculateAll(); // Update nama di list stats
+            saveState();
+        }
+
+        function updateCard(index, field, value) {
+            cards[index][field] = value;
+            calculateAll();
+        }
+
+        // --- UTILS ---
+
+        function toggleTheme() {
+            const body = document.body;
+            if (body.getAttribute('data-theme') === 'dark') {
+                body.removeAttribute('data-theme');
+            } else {
+                body.setAttribute('data-theme', 'dark');
+            }
+            saveState();
+        }
+
+        function saveState() {
+            const state = {
+                cards: cards,
+                counter: cardCounter,
+                logic: document.getElementById('logicSelector').value,
+                theme: document.body.getAttribute('data-theme')
+            };
+            localStorage.setItem('probCalcData', JSON.stringify(state));
+        }
+
+        // Jalankan awal
+        renderCards();
+
+    </script>
+</body>
+</html>
