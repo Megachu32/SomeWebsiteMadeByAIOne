@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Skin Editor & Resizer</title>
+    <!-- Library untuk 3D Minecraft Viewer -->
+    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-color: #2b2b3b;
+            --text-color: #e0e0e0;
+            --accent-color: #89b4fa;
+            --danger-color: #f38ba8;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1, h2, h3 { color: var(--accent-color); margin-bottom: 10px; }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: var(--panel-color);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+
+        .step-section { display: none; }
+        .step-section.active { display: block; animation: fadeIn 0.5s; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* UPLOAD STYLES */
+        .upload-box {
+            border: 2px dashed var(--accent-color);
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+        .upload-box:hover { background-color: rgba(137, 180, 250, 0.1); }
+
+        /* CANVAS STYLES */
+        canvas {
+            border: 1px solid #555;
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                              linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                              linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #fff; /* Checkerboard effect */
+            image-rendering: pixelated; /* PENTING UNTUK PIXEL ART */
+            cursor: crosshair;
+        }
+
+        /* EDITING LAYOUT */
+        .editor-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .sidebar {
+            flex: 1;
+            min-width: 250px;
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .canvas-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* CONTROLS */
+        .control-group { margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        
+        input[type="range"] { width: 100%; }
+        input[type="number"], input[type="text"] {
+            background: #444; color: white; border: 1px solid #666; padding: 5px; border-radius: 4px;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: #111;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+        button:hover { filter: brightness(1.1); }
+        button.secondary { background-color: #555; color: white; }
+        button.danger { background-color: var(--danger-color); color: #111; }
+        
+        .tool-btn {
+            width: 100%; margin-bottom: 5px; text-align: left; padding: 8px;
+            border: 1px solid transparent;
+        }
+        .tool-btn.active { border: 1px solid var(--accent-color); background: rgba(137, 180, 250, 0.2); }
+
+        /* 3D VIEWER */
+        #skin-container {
+            width: 300px;
+            height: 300px;
+            background: #111;
+            margin: 0 auto;
+            border-radius: 8px;
+        }
+
+        /* COLOR PICKER CUSTOM STYLES */
+        .color-row { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+        input[type="color"] { border: none; width: 40px; height: 40px; cursor: pointer; padding: 0; }
+        
+    </style>
+</head>
+<body>
+
+    <!-- STEP 1: UPLOAD -->
+    <div id="step-upload" class="container step-section active">
+        <h1>1. Upload Gambar</h1>
+        <p>Silakan upload file .png yang ingin Anda proses.</p>
+        <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+            <h3>Klik di sini untuk upload</h3>
+            <p>Format: .PNG</p>
+            <input type="file" id="fileInput" accept="image/png" style="display: none;" onchange="handleUpload(this)">
+        </div>
+    </div>
+
+    <!-- STEP 2: MAGIC REMOVER (Hapus Background/Area) -->
+    <div id="step-magic" class="container step-section">
+        <h1>2. Hapus Area (Magic Eraser)</h1>
+        <p>Klik pada bagian gambar untuk menghapusnya. Sesuaikan toleransi untuk area yang lebih luas.</p>
+        
+        <div class="editor-layout">
+            <div class="canvas-area">
+                <!-- Canvas ini menampilkan gambar asli (bisa ukuran berapapun) -->
+                <canvas id="magicCanvas"></canvas>
+            </div>
+            <div class="sidebar">
+                <div class="control-group">
+                    <label>Toleransi Warna (0 - 100)</label>
+                    <input type="range" id="toleranceRange" min="0" max="100" value="10" oninput="document.getElementById('tolVal').innerText = this.value">
+                    <span id="tolVal">10</span>
+                </div>
+                <div class="control-group">
+                    <p><small>Klik gambar untuk menghapus area berwarna sama.</small></p>
+                    <button class="secondary" onclick="resetMagicCanvas()">Reset Gambar</button>
+                </div>
+                <button onclick="goToManualEdit()">KONFIRMASI & LANJUT KE EDIT &rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: MANUAL EDITOR & 3D PREVIEW -->
+    <div id="step-editor" class="container step-section">
+        <h1>3. Pixel Editor & 3D Preview (64x64)</h1>
+        
+        <div class="editor-layout">
+            <!-- Kolom Kiri: Tools -->
+            <div class="sidebar" style="max-width: 250px;">
+                <h3>Toolbox</h3>
+                <button id="btnToolBrush" class="tool-btn active" onclick="setTool('brush')">🖌️ Brush (Lukis)</button>
+                <button id="btnToolEraser" class="tool-btn" onclick="setTool('eraser')">🧼 Eraser (Hapus/Transparan)</button>
+                <button id="btnToolPicker" class="tool-btn" onclick="setTool('picker')">🧪 Pipet Warna</button>
+                
+                <hr>
+                
+                <h3>Warna</h3>
+                <div class="control-group">
+                    <label>Warna Dasar</label>
+                    <div class="color-row">
+                        <input type="color" id="colorPicker" value="#ff0000" onchange="updateColorFromInput()">
+                        <input type="text" id="hexInput" value="#FF0000" style="width: 80px;" onchange="updateColorFromHex()">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Alpha (Transparansi) <span id="alphaVal">255</span></label>
+                    <input type="range" id="alphaRange" min="0" max="255" value="255" oninput="updateAlpha(this.value)">
+                </div>
+                
+                <div class="control-group">
+                    <label>Preview Warna Aktif:</label>
+                    <div id="activeColorPreview" style="width: 100%; height: 30px; background: red; border: 1px solid white;"></div>
+                </div>
+            </div>
+
+            <!-- Kolom Tengah: Canvas Editor 64x64 -->
+            <div class="canvas-area">
+                <h3>Editor (64x64)</h3>
+                <!-- Ditampilkan besar dengan CSS, tapi aslinya 64x64 -->
+                <canvas id="editorCanvas" width="64" height="64" style="width: 320px; height: 320px;"></canvas>
+                <br>
+                <div style="display: flex; gap: 10px;">
+                    <button class="secondary" onclick="render3D()">🔄 Update 3D View</button>
+                    <button onclick="downloadResult()">⬇️ Download .PNG</button>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan: 3D Preview -->
+            <div class="sidebar">
+                <h3>3D Minecraft Preview</h3>
+                <div id="skin-container"></div>
+                <div class="control-group" style="margin-top: 10px;">
+                    <label>Model:</label>
+                    <select id="modelType" onchange="render3D()">
+                        <option value="classic">Classic (Steve)</option>
+                        <option value="slim">Slim (Alex)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Animation:</label>
+                    <button class="secondary" style="padding: 5px;" onclick="toggleAnimation(true)">Walk</button>
+                    <button class="secondary" style="padding: 5px;" onclick="toggleAnimation(false)">Stop</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- VARIABLES ---
+        let originalImage = new Image();
+        let currentStep = 1;
+        
+        // Magic Canvas (Step 2)
+        const magicCanvas = document.getElementById('magicCanvas');
+        const magicCtx = magicCanvas.getContext('2d', { willReadFrequently: true });
+        
+        // Editor Canvas (Step 3)
+        const editorCanvas = document.getElementById('editorCanvas');
+        const editorCtx = editorCanvas.getContext('2d', { willReadFrequently: true });
+        
+        // State
+        let currentTool = 'brush'; // brush, eraser, picker
+        let brushColor = { r: 255, g: 0, b: 0, a: 255 };
+        let isDrawing = false;
+        
+        // 3D Viewer
+        let skinViewer;
+
+        // --- STEP 1: UPLOAD ---
+        function handleUpload(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    originalImage.onload = function() {
+                        initMagicCanvas();
+                        switchStep('step-magic');
+                    }
+                    originalImage.src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function switchStep(stepId) {
+            document.querySelectorAll('.step-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(stepId).classList.add('active');
+        }
+
+        // --- STEP 2: MAGIC ERASER ---
+        function initMagicCanvas() {
+            // Set canvas sesuai gambar asli (bisa besar), nanti di step 3 baru di resize 64x64
+            // Atau batasi max width agar tidak terlalu besar di layar
+            let width = originalImage.width;
+            let height = originalImage.height;
+
+            // Jika terlalu besar untuk layar, kita tetap pakai ukuran asli pixel, 
+            // tapi CSS akan menanganinya (scroll atau fit). 
+            // Untuk editor skin, biasanya gambar kecil (64x64 atau 128x128).
+            
+            magicCanvas.width = width;
+            magicCanvas.height = height;
+            magicCtx.drawImage(originalImage, 0, 0);
+        }
+
+        function resetMagicCanvas() {
+            magicCtx.clearRect(0, 0, magicCanvas.width, magicCanvas.height);
+            magicCtx.drawImage(originalImage, 0, 0);
+        }
+
+        // Event Listener Magic Canvas
+        magicCanvas.addEventListener('mousedown', function(e) {
+            const rect = magicCanvas.getBoundingClientRect();
+            // Scaling factor in case CSS width != Canvas width
+            const scaleX = magicCanvas.width / rect.width;
+            const scaleY = magicCanvas.height / rect.height;
+
+            const x = Math.floor((e.clientX - rect.left) * scaleX);
+            const y = Math.floor((e.clientY - rect.top) * scaleY);
+            
+            floodFill(x, y);
+        });
+
+        // Algoritma Flood Fill untuk menghapus area (ubah alpha ke 0)
+        function floodFill(startX, startY) {
+            const tolerance = parseInt(document.getElementById('toleranceRange').value);
+            const imgData = magicCtx.getImageData(0, 0, magicCanvas.width, magicCanvas.height);
+            const data = imgData.data;
+            const width = imgData.width;
+            const height = imgData.height;
+
+            // Get target color
+            const startPos = (startY * width + startX) * 4;
+            const targetR = data[startPos];
+            const targetG = data[startPos + 1];
+            const targetB = data[startPos + 2];
+            const targetA = data[startPos + 3];
+
+            if (targetA === 0) return; // Sudah transparan
+
+            const queue = [[startX, startY]];
+            const visited = new Uint8Array(width * height); // keep track
+
+            const matchColor = (pos) => {
+                const r = data[pos];
+                const g = data[pos + 1];
+                const b = data[pos + 2];
+                const a = data[pos + 3];
+                
+                // Jika sudah transparan, jangan dihapus lagi (anggap tidak match untuk loop, atau match agar lanjut? biasanya stop)
+                if (a === 0) return false;
+
+                // Euclidean distance sederhana atau manhattan
+                const diff = Math.abs(r - targetR) + Math.abs(g - targetG) + Math.abs(b - targetB) + Math.abs(a - targetA);
+                // Toleransi dikali 4 (karena 4 channel) atau sesuaikan rasa
+                return diff <= (tolerance * 3); 
+            };
+
+            while (queue.length > 0) {
+                const [cx, cy] = queue.shift();
+                const pos = (cy * width + cx) * 4;
+                const idx = cy * width + cx;
+
+                if (visited[idx]) continue;
+                visited[idx] = 1;
+
+                if (matchColor(pos)) {
+                    // Hapus pixel (set Alpha 0)
+                    data[pos + 3] = 0; 
+
+                    // Cek tetangga (4 arah)
+                    if (cx > 0) queue.push([cx - 1, cy]);
+                    if (cx < width - 1) queue.push([cx + 1, cy]);
+                    if (cy > 0) queue.push([cx, cy - 1]);
+                    if (cy < height - 1) queue.push([cx, cy + 1]);
+                }
+            }
+
+            magicCtx.putImageData(imgData, 0, 0);
+        }
+
+        // --- STEP 3: TRANSITION TO MANUAL EDIT ---
+        function goToManualEdit() {
+            // 1. Ambil data dari Magic Canvas
+            // 2. Resize paksa ke 64x64
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 64;
+            tempCanvas.height = 64;
+            const tCtx = tempCanvas.getContext('2d');
+
+            // Draw image dari magicCanvas ke tempCanvas (otomatis resizing)
+            // Menggunakan imageSmoothingEnabled = false agar tajam
+            tCtx.imageSmoothingEnabled = false;
+            tCtx.drawImage(magicCanvas, 0, 0, magicCanvas.width, magicCanvas.height, 0, 0, 64, 64);
+
+            // Masukkan ke Editor Canvas utama
+            editorCtx.clearRect(0, 0, 64, 64);
+            editorCtx.drawImage(tempCanvas, 0, 0);
+
+            switchStep('step-editor');
+            init3DViewer();
+            render3D(); // Render awal
+            updateColorPreview();
+        }
+
+        // --- STEP 3: MANUAL EDITOR LOGIC ---
+        
+        // Tool Selection
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            if(tool === 'brush') document.getElementById('btnToolBrush').classList.add('active');
+            if(tool === 'eraser') document.getElementById('btnToolEraser').classList.add('active');
+            if(tool === 'picker') document.getElementById('btnToolPicker').classList.add('active');
+        }
+
+        // Color Management
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        }
+
+        function updateColorFromInput() {
+            const hex = document.getElementById('colorPicker').value;
+            document.getElementById('hexInput').value = hex;
+            const rgb = hexToRgb(hex);
+            brushColor.r = rgb.r;
+            brushColor.g = rgb.g;
+            brushColor.b = rgb.b;
+            updateColorPreview();
+        }
+
+        function updateColorFromHex() {
+            const hex = document.getElementById('hexInput').value;
+            const rgb = hexToRgb(hex);
+            if (rgb) {
+                document.getElementById('colorPicker').value = hex;
+                brushColor.r = rgb.r;
+                brushColor.g = rgb.g;
+                brushColor.b = rgb.b;
+                updateColorPreview();
+            }
+        }
+
+        function updateAlpha(val) {
+            brushColor.a = parseInt(val);
+            document.getElementById('alphaVal').innerText = val;
+            updateColorPreview();
+        }
+
+        function updateColorPreview() {
+            const div = document.getElementById('activeColorPreview');
+            div.style.backgroundColor = `rgba(${brushColor.r}, ${brushColor.g}, ${brushColor.b}, ${brushColor.a / 255})`;
+        }
+
+        // Drawing Logic on Editor Canvas
+        function getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            // Canvas width css is 320, internal is 64. Scale = 5
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: Math.floor((evt.clientX - rect.left) * scaleX),
+                y: Math.floor((evt.clientY - rect.top) * scaleY)
+            };
+        }
+
+        function drawPixel(x, y) {
+            if (x < 0 || x >= 64 || y < 0 || y >= 64) return;
+
+            const pixelData = editorCtx.createImageData(1, 1);
+            const d = pixelData.data;
+
+            if (currentTool === 'eraser') {
+                // Clear rect lebih bersih untuk eraser
+                editorCtx.clearRect(x, y, 1, 1);
+            } else if (currentTool === 'brush') {
+                d[0] = brushColor.r;
+                d[1] = brushColor.g;
+                d[2] = brushColor.b;
+                d[3] = brushColor.a;
+                editorCtx.putImageData(pixelData, x, y);
+            } else if (currentTool === 'picker') {
+                const p = editorCtx.getImageData(x, y, 1, 1).data;
+                brushColor.r = p[0];
+                brushColor.g = p[1];
+                brushColor.b = p[2];
+                brushColor.a = p[3];
+                
+                // Update UI
+                const hex = rgbToHex(p[0], p[1], p[2]);
+                document.getElementById('colorPicker').value = hex;
+                document.getElementById('hexInput').value = hex;
+                document.getElementById('alphaRange').value = p[3];
+                document.getElementById('alphaVal').innerText = p[3];
+                updateColorPreview();
+                
+                // Auto switch back to brush after pick
+                setTool('brush');
+            }
+        }
+
+        editorCanvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const pos = getMousePos(editorCanvas, e);
+            drawPixel(pos.x, pos.y);
+        });
+
+        editorCanvas.addEventListener('mousemove', (e) => {
+            if (isDrawing && currentTool !== 'picker') {
+                const pos = getMousePos(editorCanvas, e);
+                drawPixel(pos.x, pos.y);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDrawing) {
+                isDrawing = false;
+                // Auto update 3D view on mouse up (biar gak lag)
+                render3D();
+            }
+        });
+
+        // --- 3D VIEWER LOGIC ---
+        function init3DViewer() {
+            if(!skinViewer) {
+                skinViewer = new skinview3d.SkinViewer({
+                    canvas: document.getElementById("skin-container"),
+                    width: 300,
+                    height: 300,
+                    skin: null
+                });
+                
+                // Set initial controls
+                skinViewer.camera.position.z = 70;
+                skinViewer.controls.enableZoom = true;
+                skinViewer.controls.enableRotate = true;
+            }
+        }
+
+        function render3D() {
+            // Ambil data dari canvas sebagai base64
+            const dataURL = editorCanvas.toDataURL("image/png");
+            const model = document.getElementById('modelType').value;
+            
+            // Load skin ke viewer
+            skinViewer.loadSkin(dataURL, { model: model === 'slim' ? 'slim' : 'default' });
+        }
+
+        function toggleAnimation(enable) {
+            if (enable) {
+                skinViewer.animation = new skinview3d.WalkingAnimation();
+            } else {
+                skinViewer.animation = null;
+            }
+        }
+
+        // --- DOWNLOAD ---
+        function downloadResult() {
+            const link = document.createElement('a');
+            link.download = 'minecraft-skin-edit.png';
+            link.href = editorCanvas.toDataURL("image/png");
+            link.click();
+        }
+
+    </script>
+</body>
+</html>
