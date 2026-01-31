@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fibonacci Test</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        input { padding: 5px; font-size: 16px; }
+        button { padding: 5px 10px; font-size: 16px; }
+        #result { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Fibonacci Calculator</h2>
+    <p>Enter a number to calculate:</p>
+    
+    <input type="number" id="inputNumber" placeholder="e.g. 5">
+    <button onclick="startProgram()">Run</button>
+    
+    <div id="result"></div>
+
+    <script>
+        // --- YOUR LOGIC TRANSLATED TO JAVASCRIPT ---
+
+        function rep_fibbo(prev, next, loop) {
+            // Using your variable names and logic structure
+            if (loop > 0) {
+                // The fixed recursive step
+                return rep_fibbo(next, (prev + next), (loop - 1));
+            } 
+            else {
+                // The fixed base case
+                return prev;
+            }
+        }
+
+        // --- MAIN ---
+        function startProgram() {
+            // Get input from the text box
+            let number = parseInt(document.getElementById("inputNumber").value);
+
+            if (isNaN(number)) {
+                document.getElementById("result").innerText = "Please enter a valid number.";
+                return;
+            }
+
+            // Your main function logic
+            // rep_fibbo(1, 1, number)
+            let finalResult = rep_fibbo(0, 1, number); 
+            
+            // Note: I used 0,1 as starters so that if input is 1, answer is 1. 
+            // If you prefer your original 1,1 start, change the line above to:
+            // let finalResult = rep_fibbo(1, 1, number);
+
+            // Show result
+            document.getElementById("result").innerText = "Result: " + finalResult;
+        }
+    </script>
+
+</body>
+</html>
