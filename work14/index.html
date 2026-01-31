@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pocket Base</title>
+<style>
+    /* --- CSS VARIABLES & RESET --- */
+    :root {
+        --bg: #f4f4f9;
+        --sidebar-bg: #ffffff;
+        --border: #ddd;
+        --primary: #6200ea;
+        --text: #333;
+        --danger: #d32f2f;
+        --success: #388e3c;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+    
+    /* --- LAYOUT --- */
+    #app-container { display: flex; flex: 1; overflow: hidden; position: relative; }
+    
+    /* LEFT PANEL (LIST) */
+    #list-panel { width: 350px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    #list-header { padding: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #fff; }
+    #list-content { flex: 1; overflow-y: auto; padding: 10px; }
+    
+    /* RIGHT PANEL (DETAIL) */
+    #detail-panel { flex: 1; background: var(--bg); display: flex; flex-direction: column; position: relative; }
+    #detail-header { padding: 10px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; height: 50px; }
+    #detail-content { flex: 1; overflow-y: auto; padding: 20px; }
+    #empty-state { text-align: center; color: #888; margin-top: 50px; }
+
+    /* MOBILE RESPONSIVE OVERRIDES */
+    @media (max-width: 768px) {
+        #list-panel { width: 100%; position: absolute; top: 0; bottom: 0; left: 0; transition: transform 0.3s ease; }
+        #detail-panel { width: 100%; position: absolute; top: 0; bottom: 0; right: 0; transform: translateX(100%); transition: transform 0.3s ease; z-index: 20; }
+        
+        /* Mobile States */
+        body.view-detail #list-panel { transform: translateX(-20%); opacity: 0; pointer-events: none; }
+        body.view-detail #detail-panel { transform: translateX(0); }
+    }
+
+    /* --- UI ELEMENTS --- */
+    button { cursor: pointer; border: none; background: transparent; padding: 8px; border-radius: 4px; font-size: 16px; }
+    button:active { background: #eee; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-icon { font-size: 1.2rem; }
+    
+    input[type="text"], textarea, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; font-family: inherit; }
+    
+    /* ITEMS IN LIST */
+    .list-item { background: #fff; border: 1px solid var(--border); padding: 12px; margin-bottom: 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; }
+    .list-item:active { background: #f0f0f0; }
+    .list-item .meta { margin-left: 10px; flex: 1; }
+    .list-item .title { font-weight: bold; display: block; }
+    .list-item .desc { font-size: 0.8rem; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item .type-badge { font-size: 0.7rem; background: #eee; padding: 2px 6px; border-radius: 4px; color: #555; }
+    
+    /* CHECKBOX MODE */
+    .select-checkbox { margin-right: 10px; display: none; transform: scale(1.3); }
+    body.select-mode .select-checkbox { display: block; }
+    
+    /* MODALS */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
+    .modal { background: #fff; width: 90%; max-width: 400px; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; }
+    .modal.active { display: flex; }
+    
+    /* --- COMPONENT STYLES --- */
+    /* Note */
+    .note-editor { width: 100%; height: 300px; resize: vertical; font-family: monospace; }
+    
+    /* Tasks */
+    .task-row { display: flex; align-items: center; margin-bottom: 8px; background: #fff; padding: 8px; border: 1px solid #eee; border-radius: 4px; }
+    .task-controls { margin-left: auto; display: flex; gap: 5px; }
+    .progress-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 5px; width: 100%; }
+    .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s; }
+    
+    /* Cells */
+    .cells-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+    .cell-item { border: 1px solid #ccc; padding: 10px; min-height: 80px; border-radius: 4px; position: relative; }
+    .cell-item textarea { width: 100%; height: 100%; border: none; background: transparent; resize: none; }
+    .cell-color { position: absolute; bottom: 5px; right: 5px; width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 1px solid #999; }
+    
+    /* Script */
+    .console-box { background: #222; color: #0f0; font-family: monospace; padding: 10px; margin-top: 10px; border-radius: 4px; min-height: 50px; white-space: pre-wrap; }
+
+    /* Categories Manager */
+    .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+    .cat-controls button { font-size: 1.2rem; padding: 0 5px; }
+    .hidden { display: none !important; }
+
+</style>
+</head>
+<body>
+
+    <div id="list-panel">
+        <div id="list-header">
+            <div>
+                <button class="btn-icon" onclick="toggleSelectMode()">☑️</button>
+                <button class="btn-icon" id="trash-btn" onclick="deleteSelected()" disabled>🗑️</button>
+            </div>
+            <div>
+                <button class="btn-icon" onclick="openCatModal()">⚙️</button>
+                <button class="btn-icon" onclick="openCreateModal()">➕</button>
+            </div>
+        </div>
+        <div id="list-content">
+            </div>
+        <div style="padding:10px; border-top:1px solid #ddd; display:flex; gap:10px;">
+            <button onclick="saveToFile()" style="flex:1;">Save JSON</button>
+            <button onclick="document.getElementById('file-input').click()" style="flex:1;">Load JSON</button>
+            <input type="file" id="file-input" hidden onchange="loadFromFile(this)">
+        </div>
+    </div>
+
+    <div id="detail-panel">
+        <div id="detail-header">
+            <button class="btn-icon" onclick="closeDetail()" style="display:none;" id="back-btn">⬅️ Back</button>
+            <span id="detail-title" style="font-weight:bold; margin-left:10px;"></span>
+            <button onclick="exportCurrentItem()" style="font-size:0.8rem;">Export Item</button>
+        </div>
+        <div id="detail-content">
+            <div id="empty-state">Select an item to view details</div>
+            <div id="item-workspace" class="hidden">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-create" class="modal-overlay">
+        <div class="modal">
+            <h3>Create New</h3>
+            <label>Title</label>
+            <input type="text" id="new-title">
+            <label>Type</label>
+            <select id="new-type">
+                <option value="note">Note</option>
+                <option value="task">Task</option>
+                <option value="cells">Cells</option>
+                <option value="script">Script (Code)</option>
+            </select>
+            <label>Category</label>
+            <select id="new-cat">
+                </select>
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="closeModals()">Cancel</button>
+                <button class="btn-primary" onclick="createItem()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-cat" class="modal-overlay">
+        <div class="modal">
+            <h3>Manage Categories</h3>
+            <div id="cat-list-container"></div>
+            <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+                <input type="text" id="new-cat-name" placeholder="New Category Name">
+                <button onclick="addNewCategory()">Add</button>
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="closeModals()">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal-import" class="modal-overlay">
+        <div class="modal">
+            <h3>Import Item</h3>
+            <textarea id="import-area" style="height:100px" placeholder="Paste JSON string here"></textarea>
+            <button class="btn-primary" onclick="processImport()">Import</button>
+            <button onclick="closeModals()">Cancel</button>
+        </div>
+    </div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let db = {
+        items: [],
+        categories: [
+            { id: 'cat_1', name: 'General', visible: true, priority: 1 },
+            { id: 'cat_2', name: 'Work', visible: true, priority: 2 },
+            { id: 'cat_3', name: 'Personal', visible: true, priority: 3 }
+        ]
+    };
+
+    let currentItemId = null;
+    let selectMode = false;
+
+    // --- INIT ---
+    window.onload = () => {
+        const saved = localStorage.getItem('pocketbase_db');
+        if (saved) db = JSON.parse(saved);
+        renderList();
+        
+        // Mobile Back Button Logic
+        if(window.innerWidth <= 768) {
+            document.getElementById('back-btn').style.display = 'block';
+        }
+    };
+
+    function saveData() {
+        localStorage.setItem('pocketbase_db', JSON.stringify(db));
+        renderList();
+    }
+
+    // --- CORE LIST FUNCTIONS ---
+    function renderList() {
+        const container = document.getElementById('list-content');
+        container.innerHTML = '';
+        
+        // Sort Categories by Priority
+        const sortedCats = [...db.categories].sort((a,b) => a.priority - b.priority);
+
+        sortedCats.forEach(cat => {
+            if(!cat.visible) return;
+
+            // Filter items for this category
+            const items = db.items.filter(i => i.catId === cat.id);
+            if(items.length === 0) return; // Don't show empty headers if you prefer
+
+            const catHeader = document.createElement('div');
+            catHeader.style.padding = "5px 10px";
+            catHeader.style.background = "#eee";
+            catHeader.style.fontWeight = "bold";
+            catHeader.style.fontSize = "0.8rem";
+            catHeader.innerText = cat.name;
+            container.appendChild(catHeader);
+
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `
+                    <input type="checkbox" class="select-checkbox" data-id="${item.id}" onclick="event.stopPropagation()">
+                    <div class="meta">
+                        <span class="title">${esc(item.title)}</span>
+                        <span class="type-badge">${item.type}</span> 
+                        <span style="font-size:0.7rem; color:#999;">${new Date(item.created).toLocaleDateString()}</span>
+                    </div>
+                `;
+                div.onclick = (e) => {
+                    if(!selectMode) openItem(item.id);
+                    else {
+                        const cb = div.querySelector('input');
+                        cb.checked = !cb.checked;
+                    }
+                };
+                container.appendChild(div);
+            });
+        });
+    }
+
+    // --- ITEM DETAIL LOGIC ---
+    function openItem(id) {
+        currentItemId = id;
+        const item = db.items.find(i => i.id === id);
+        if(!item) return;
+
+        // UI Shift for Mobile
+        document.body.classList.add('view-detail');
+        
+        document.getElementById('detail-title').innerText = item.title;
+        document.getElementById('empty-state').classList.add('hidden');
+        const workspace = document.getElementById('item-workspace');
+        workspace.classList.remove('hidden');
+        workspace.innerHTML = ''; // Clear prev
+
+        // RENDER BASED ON TYPE
+        if (item.type === 'note') renderNote(item, workspace);
+        else if (item.type === 'task') renderTask(item, workspace);
+        else if (item.type === 'cells') renderCells(item, workspace);
+        else if (item.type === 'script') renderScript(item, workspace);
+    }
+
+    function closeDetail() {
+        document.body.classList.remove('view-detail');
+        currentItemId = null;
+    }
+
+    // 1. NOTE TYPE
+    function renderNote(item, container) {
+        const textarea = document.createElement('textarea');
+        textarea.className = 'note-editor';
+        textarea.value = item.content || '';
+        textarea.oninput = () => {
+            item.content = textarea.value;
+            saveData();
+        };
+        container.appendChild(textarea);
+    }
+
+    // 2. TASK TYPE
+    function renderTask(item, container) {
+        // Control Bar
+        const controls = document.createElement('div');
+        controls.innerHTML = `
+            <button onclick="addTaskItem('check')">+ Check</button>
+            <button onclick="addTaskItem('radio')">+ Radio</button>
+            <button onclick="addTaskItem('progress')">+ Progress</button>
+            <button onclick="addTaskItem('tally')">+ Tally</button>
+        `;
+        container.appendChild(controls);
+        
+        const listContainer = document.createElement('div');
+        listContainer.style.marginTop = "20px";
+        
+        if(!item.content) item.content = [];
+
+        item.content.forEach((task, index) => {
+            const row = document.createElement('div');
+            row.className = 'task-row';
+            
+            // Logic per task sub-type
+            let inputHTML = '';
+            
+            if(task.type === 'check') {
+                inputHTML = `<input type="checkbox" ${task.val ? 'checked' : ''} onchange="updateTaskVal(${index}, this.checked)">`;
+            } else if (task.type === 'radio') {
+                // Radio logic: Group name
+                inputHTML = `
+                    <input type="text" placeholder="Grp" value="${task.group || 'g1'}" style="width:40px; font-size:0.7rem;" onchange="updateTaskGroup(${index}, this.value)">
+                    <input type="radio" name="radio-${item.id}-${task.group || 'g1'}" ${task.val ? 'checked' : ''} onchange="updateTaskRadio(${index}, '${task.group || 'g1'}')">
+                `;
+            } else if (task.type === 'tally') {
+                inputHTML = `
+                    <button onclick="updateTaskTally(${index}, -1)">-</button>
+                    <span style="margin:0 10px; font-weight:bold;">${task.val || 0}</span>
+                    <button onclick="updateTaskTally(${index}, 1)">+</button>
+                `;
+            } else if (task.type === 'progress') {
+                inputHTML = `
+                    <div style="width:100%">
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                            <span>Progress</span>
+                            <span>${task.val || 0} / ${task.max || 100}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width:${((task.val||0)/(task.max||100))*100}%"></div>
+                        </div>
+                        <input type="range" min="0" max="${task.max||100}" value="${task.val||0}" style="width:100%" oninput="updateTaskVal(${index}, parseInt(this.value))">
+                    </div>
+                `;
+            }
+
+            row.innerHTML = `
+                <div style="flex:1;">
+                    <input type="text" value="${task.label}" placeholder="Label" style="border:none; font-weight:bold; width:100%;" onchange="updateTaskLabel(${index}, this.value)">
+                    <div style="margin-top:5px; display:flex; align-items:center; gap:10px;">
+                        ${inputHTML}
+                    </div>
+                </div>
+                <button style="color:red;" onclick="removeTaskItem(${index})">X</button>
+            `;
+            listContainer.appendChild(row);
+        });
+        container.appendChild(listContainer);
+    }
+
+    // 3. CELLS TYPE
+    function renderCells(item, container) {
+        container.innerHTML = `<button onclick="addCell()">+ Add Cell</button><br><br>`;
+        const grid = document.createElement('div');
+        grid.className = 'cells-grid';
+        
+        if(!item.content) item.content = [];
+
+        item.content.forEach((cell, index) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'cell-item';
+            wrapper.style.backgroundColor = cell.color || '#ffffff';
+            
+            const txt = document.createElement('textarea');
+            txt.value = cell.text || '';
+            txt.oninput = (e) => {
+                item.content[index].text = e.target.value;
+                saveData();
+            };
+
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.className = 'cell-color';
+            colorPicker.value = cell.color || '#ffffff';
+            colorPicker.onchange = (e) => {
+                item.content[index].color = e.target.value;
+                saveData();
+                wrapper.style.backgroundColor = e.target.value;
+            };
+
+            const delBtn = document.createElement('button');
+            delBtn.innerText = 'x';
+            delBtn.style.position = 'absolute';
+            delBtn.style.top = '0';
+            delBtn.style.right = '0';
+            delBtn.style.background = 'rgba(255,255,255,0.5)';
+            delBtn.onclick = () => {
+                item.content.splice(index, 1);
+                saveData();
+                openItem(item.id); // rerender
+            };
+
+            wrapper.appendChild(txt);
+            wrapper.appendChild(colorPicker);
+            wrapper.appendChild(delBtn);
+            grid.appendChild(wrapper);
+        });
+        container.appendChild(grid);
+    }
+
+    // 4. SCRIPT TYPE
+    function renderScript(item, container) {
+        const info = document.createElement('p');
+        info.innerHTML = "<small>Write JavaScript code below. Use <code>print(msg)</code> to output.</small>";
+        
+        const area = document.createElement('textarea');
+        area.className = 'note-editor';
+        area.style.background = '#eee';
+        area.value = item.content || '// Your code here\nprint("Hello World");';
+        area.oninput = () => {
+            item.content = area.value;
+            saveData();
+        };
+
+        const runBtn = document.createElement('button');
+        runBtn.className = 'btn-primary';
+        runBtn.innerText = 'Run Code';
+        
+        const consoleOut = document.createElement('div');
+        consoleOut.className = 'console-box';
+        consoleOut.id = 'script-console';
+
+        runBtn.onclick = () => {
+            consoleOut.innerText = ''; // clear
+            
+            // Custom print function
+            const print = (msg) => {
+                consoleOut.innerText += msg + '\n';
+            };
+
+            try {
+                // Safe-ish eval using Function constructor
+                // We pass 'print' and the 'db' (read-only if we wanted, but let's give full access)
+                const func = new Function('print', 'db', item.content);
+                func(print, db);
+                print("--- Execution Finished ---");
+            } catch (err) {
+                print("ERROR: " + err.message);
+            }
+        };
+
+        container.appendChild(info);
+        container.appendChild(area);
+        container.appendChild(runBtn);
+        container.appendChild(consoleOut);
+    }
+
+
+    // --- TASK HELPERS ---
+    function addTaskItem(type) {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content.push({ type: type, label: 'New Task', val: 0, max: 100, group: 'g1' });
+        saveData();
+        openItem(currentItemId);
+    }
+    function removeTaskItem(index) {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content.splice(index, 1);
+        saveData();
+        openItem(currentItemId);
+    }
+    function updateTaskLabel(index, val) {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content[index].label = val;
+        saveData();
+    }
+    function updateTaskVal(index, val) {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content[index].val = val;
+        saveData();
+        openItem(currentItemId); // refresh for UI updates like progress bar width
+    }
+    function updateTaskGroup(index, val) {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content[index].group = val;
+        saveData();
+    }
+    function updateTaskRadio(index, group) {
+        const item = db.items.find(i => i.id === currentItemId);
+        // Uncheck others in group
+        item.content.forEach(t => {
+            if(t.type === 'radio' && t.group === group) t.val = false;
+        });
+        item.content[index].val = true;
+        saveData();
+    }
+    function updateTaskTally(index, delta) {
+        const item = db.items.find(i => i.id === currentItemId);
+        if(!item.content[index].val) item.content[index].val = 0;
+        item.content[index].val += delta;
+        saveData();
+        openItem(currentItemId);
+    }
+
+    // --- CELL HELPERS ---
+    function addCell() {
+        const item = db.items.find(i => i.id === currentItemId);
+        item.content.push({ text: '', color: '#ffeb3b' }); // default sticky yellow
+        saveData();
+        openItem(currentItemId);
+    }
+
+    // --- MODAL & CREATE ---
+    function openCreateModal() {
+        document.getElementById('modal-create').classList.add('active');
+        const sel = document.getElementById('new-cat');
+        sel.innerHTML = '';
+        db.categories.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.innerText = c.name;
+            sel.appendChild(opt);
+        });
+    }
+
+    function createItem() {
+        const title = document.getElementById('new-title').value || 'Untitled';
+        const type = document.getElementById('new-type').value;
+        const cat = document.getElementById('new-cat').value;
+
+        const newItem = {
+            id: crypto.randomUUID(),
+            created: Date.now(),
+            title: title,
+            type: type,
+            catId: cat,
+            content: (type === 'task' || type === 'cells') ? [] : ''
+        };
+
+        db.items.unshift(newItem); // Add to top
+        saveData();
+        closeModals();
+        renderList();
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    }
+
+    // --- CATEGORY MANAGER ---
+    function openCatModal() {
+        document.getElementById('modal-cat').classList.add('active');
+        renderCatManager();
+    }
+
+    function renderCatManager() {
+        const cont = document.getElementById('cat-list-container');
+        cont.innerHTML = '';
+        db.categories.sort((a,b) => a.priority - b.priority).forEach((c, idx) => {
+            const row = document.createElement('div');
+            row.className = 'cat-row';
+            row.innerHTML = `
+                <div>
+                    <input type="checkbox" ${c.visible ? 'checked' : ''} onchange="toggleCatVis('${c.id}')">
+                    <span>${c.name}</span>
+                </div>
+                <div class="cat-controls">
+                    <button onclick="moveCat('${c.id}', -1)">⬆️</button>
+                    <button onclick="moveCat('${c.id}', 1)">⬇️</button>
+                </div>
+            `;
+            cont.appendChild(row);
+        });
+    }
+    
+    function addNewCategory() {
+        const name = document.getElementById('new-cat-name').value;
+        if(!name) return;
+        db.categories.push({
+            id: 'cat_' + Date.now(),
+            name: name,
+            visible: true,
+            priority: db.categories.length + 1
+        });
+        document.getElementById('new-cat-name').value = '';
+        saveData();
+        renderCatManager();
+        renderList();
+    }
+
+    function toggleCatVis(id) {
+        const c = db.categories.find(x => x.id === id);
+        c.visible = !c.visible;
+        saveData();
+        renderList();
+    }
+
+    function moveCat(id, dir) {
+        const idx = db.categories.findIndex(c => c.id === id);
+        const swapIdx = idx + dir;
+        if(swapIdx < 0 || swapIdx >= db.categories.length) return;
+        
+        // Swap priority values
+        const temp = db.categories[idx].priority;
+        db.categories[idx].priority = db.categories[swapIdx].priority;
+        db.categories[swapIdx].priority = temp;
+        
+        // Re-sort array
+        db.categories.sort((a,b) => a.priority - b.priority);
+        
+        saveData();
+        renderCatManager();
+        renderList();
+    }
+
+    // --- IMPORT / EXPORT ---
+    function saveToFile() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "pocketbase_" + Date.now() + ".json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function loadFromFile(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const loaded = JSON.parse(e.target.result);
+                // Basic validation
+                if(loaded.items && loaded.categories) {
+                    db = loaded;
+                    saveData();
+                    renderList();
+                    alert("Loaded successfully!");
+                } else {
+                    alert("Invalid JSON format");
+                }
+            } catch(err) { alert("Error reading file"); }
+        };
+        reader.readAsText(file);
+    }
+
+    function exportCurrentItem() {
+        const item = db.items.find(i => i.id === currentItemId);
+        const json = JSON.stringify(item);
+        // Copy to clipboard or show in modal
+        // Since mobile clipboard can be flaky, let's just show prompt or alert
+        // Better: Use prompt so user can copy easily
+        // Even better: Use navigator.clipboard if available, else prompt
+        navigator.clipboard.writeText(json).then(() => {
+            alert("Item JSON copied to clipboard!");
+        }).catch(() => {
+            prompt("Copy this JSON:", json);
+        });
+    }
+    
+    // Hidden Import Button (add to UI if you want, currently manual via console or add button)
+    // Let's add an Import button to list header for "Item Import"
+    // I added it to the "+" modal or header? Let's add a button in the top right.
+    // For now, I'll trigger it via a new button in the list header I missed.
+    // Let's repurpose the Create Modal to have an "Import from JSON" link, or just add a button next to create.
+    
+    // Adding Import Button Logic dynamically
+    const headerBtns = document.querySelector('#list-header div:last-child');
+    const impBtn = document.createElement('button');
+    impBtn.className = 'btn-icon';
+    impBtn.innerText = '📥';
+    impBtn.onclick = () => document.getElementById('modal-import').classList.add('active');
+    headerBtns.insertBefore(impBtn, headerBtns.firstChild);
+
+    function processImport() {
+        const str = document.getElementById('import-area').value;
+        try {
+            const partial = JSON.parse(str);
+            // It might be a full DB or a single item. Assuming single item per request.
+            if(partial.title && partial.type) {
+                partial.id = crypto.randomUUID(); // NEW ID
+                partial.created = Date.now();
+                db.items.unshift(partial);
+                saveData();
+                renderList();
+                closeModals();
+                alert("Imported: " + partial.title);
+            } else {
+                alert("Invalid item data");
+            }
+        } catch(e) {
+            alert("JSON Parse Error");
+        }
+    }
+
+    // --- UTILS ---
+    function toggleSelectMode() {
+        selectMode = !selectMode;
+        document.body.classList.toggle('select-mode', selectMode);
+        document.getElementById('trash-btn').disabled = !selectMode;
+    }
+    
+    function deleteSelected() {
+        if(!confirm("Delete selected items?")) return;
+        const checks = document.querySelectorAll('.select-checkbox:checked');
+        const ids = Array.from(checks).map(c => c.getAttribute('data-id'));
+        db.items = db.items.filter(i => !ids.includes(i.id));
+        saveData();
+        renderList();
+        toggleSelectMode(); // Exit mode
+    }
+
+    function esc(str) {
+        if(!str) return '';
+        return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+</script>
+</body>
+  </html>
