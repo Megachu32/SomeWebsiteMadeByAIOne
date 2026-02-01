@@ -64,10 +64,13 @@
     
     /* MODALS */
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
-    .modal { background: #fff; width: 90%; max-width: 400px; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; }
+    .modal { background: #fff; width: 90%; max-width: 400px; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; position: relative; }
     .modal.active { display: flex; }
+    .modal-close-top { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; padding: 5px; }
     
     /* --- COMPONENT STYLES --- */
+    .item-description-box { background: #eef; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9rem; color: #556; font-style: italic; }
+
     /* Note */
     .note-editor { width: 100%; height: 300px; resize: vertical; font-family: monospace; }
     
@@ -124,27 +127,35 @@
         <div id="detail-content">
             <div id="empty-state">Select an item to view details</div>
             <div id="item-workspace" class="hidden">
-                </div>
+                <div id="detail-desc" class="item-description-box"></div>
+                <div id="workspace-body"></div>
+            </div>
         </div>
     </div>
 
     <div id="modal-create" class="modal-overlay">
         <div class="modal">
+            <div class="modal-close-top" onclick="closeModals()">✖</div>
             <h3>Create New</h3>
+            
             <label>Title</label>
-            <input type="text" id="new-title">
+            <input type="text" id="new-title" placeholder="Item Title">
+
+            <label>Description</label>
+            <textarea id="new-desc" placeholder="Brief description..." style="height:60px;"></textarea>
+
+            <label>Categories (separate with ;)</label>
+            <input type="text" id="new-cat-str" placeholder="e.g. Work; Urgent">
+
             <label>Type</label>
             <select id="new-type">
                 <option value="note">Note</option>
                 <option value="task">Task</option>
                 <option value="cells">Cells</option>
-                <option value="script">Script (Code)</option>
+                <option value="script">Code</option>
             </select>
-            <label>Category</label>
-            <select id="new-cat">
-                </select>
+            
             <div style="margin-top:20px; text-align:right;">
-                <button onclick="closeModals()">Cancel</button>
                 <button class="btn-primary" onclick="createItem()">Create</button>
             </div>
         </div>
@@ -152,35 +163,33 @@
 
     <div id="modal-cat" class="modal-overlay">
         <div class="modal">
+            <div class="modal-close-top" onclick="closeModals()">✖</div>
             <h3>Manage Categories</h3>
             <div id="cat-list-container"></div>
             <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
                 <input type="text" id="new-cat-name" placeholder="New Category Name">
                 <button onclick="addNewCategory()">Add</button>
             </div>
-            <div style="margin-top:20px; text-align:right;">
-                <button onclick="closeModals()">Close</button>
-            </div>
         </div>
     </div>
     
     <div id="modal-import" class="modal-overlay">
         <div class="modal">
+            <div class="modal-close-top" onclick="closeModals()">✖</div>
             <h3>Import Item</h3>
             <textarea id="import-area" style="height:100px" placeholder="Paste JSON string here"></textarea>
             <button class="btn-primary" onclick="processImport()">Import</button>
-            <button onclick="closeModals()">Cancel</button>
         </div>
     </div>
+
+<script src="library.js"></script>
 
 <script>
     // --- STATE MANAGEMENT ---
     let db = {
         items: [],
         categories: [
-            { id: 'cat_1', name: 'General', visible: true, priority: 1 },
-            { id: 'cat_2', name: 'Work', visible: true, priority: 2 },
-            { id: 'cat_3', name: 'Personal', visible: true, priority: 3 }
+            { id: 'cat_default', name: 'General', visible: true, priority: 1 }
         ]
     };
 
@@ -215,9 +224,15 @@
         sortedCats.forEach(cat => {
             if(!cat.visible) return;
 
-            // Filter items for this category
-            const items = db.items.filter(i => i.catId === cat.id);
-            if(items.length === 0) return; // Don't show empty headers if you prefer
+            // Find items that belong to this category
+            // Logic: db.items now have 'catIds' (array) or legacy 'catId' (string)
+            // We show the item under this header if the item includes this cat.id
+            const items = db.items.filter(i => {
+                if(i.catIds && Array.isArray(i.catIds)) return i.catIds.includes(cat.id);
+                return i.catId === cat.id; // Legacy support
+            });
+            
+            if(items.length === 0) return;
 
             const catHeader = document.createElement('div');
             catHeader.style.padding = "5px 10px";
@@ -235,7 +250,6 @@
                     <div class="meta">
                         <span class="title">${esc(item.title)}</span>
                         <span class="type-badge">${item.type}</span> 
-                        <span style="font-size:0.7rem; color:#999;">${new Date(item.created).toLocaleDateString()}</span>
                     </div>
                 `;
                 div.onclick = (e) => {
@@ -261,15 +275,27 @@
         
         document.getElementById('detail-title').innerText = item.title;
         document.getElementById('empty-state').classList.add('hidden');
+        
+        // Show Description
+        const descBox = document.getElementById('detail-desc');
+        if(item.desc) {
+            descBox.innerText = item.desc;
+            descBox.classList.remove('hidden');
+        } else {
+            descBox.classList.add('hidden');
+        }
+
         const workspace = document.getElementById('item-workspace');
         workspace.classList.remove('hidden');
-        workspace.innerHTML = ''; // Clear prev
+        
+        const bodyContainer = document.getElementById('workspace-body');
+        bodyContainer.innerHTML = ''; // Clear prev
 
         // RENDER BASED ON TYPE
-        if (item.type === 'note') renderNote(item, workspace);
-        else if (item.type === 'task') renderTask(item, workspace);
-        else if (item.type === 'cells') renderCells(item, workspace);
-        else if (item.type === 'script') renderScript(item, workspace);
+        if (item.type === 'note') renderNote(item, bodyContainer);
+        else if (item.type === 'task') renderTask(item, bodyContainer);
+        else if (item.type === 'cells') renderCells(item, bodyContainer);
+        else if (item.type === 'script') renderScript(item, bodyContainer);
     }
 
     function closeDetail() {
@@ -316,7 +342,6 @@
             if(task.type === 'check') {
                 inputHTML = `<input type="checkbox" ${task.val ? 'checked' : ''} onchange="updateTaskVal(${index}, this.checked)">`;
             } else if (task.type === 'radio') {
-                // Radio logic: Group name
                 inputHTML = `
                     <input type="text" placeholder="Grp" value="${task.group || 'g1'}" style="width:40px; font-size:0.7rem;" onchange="updateTaskGroup(${index}, this.value)">
                     <input type="radio" name="radio-${item.id}-${task.group || 'g1'}" ${task.val ? 'checked' : ''} onchange="updateTaskRadio(${index}, '${task.group || 'g1'}')">
@@ -395,7 +420,7 @@
             delBtn.onclick = () => {
                 item.content.splice(index, 1);
                 saveData();
-                openItem(item.id); // rerender
+                openItem(item.id); 
             };
 
             wrapper.appendChild(txt);
@@ -406,15 +431,17 @@
         container.appendChild(grid);
     }
 
-    // 4. SCRIPT TYPE
+    // 4. SCRIPT/CODE TYPE (UPDATED)
     function renderScript(item, container) {
         const info = document.createElement('p');
-        info.innerHTML = "<small>Write JavaScript code below. Use <code>print(msg)</code> to output.</small>";
+        info.innerHTML = "<small>Type the function call from your <code>library.js</code>. E.g., <code>myCustomFunc()</code></small>";
         
         const area = document.createElement('textarea');
         area.className = 'note-editor';
         area.style.background = '#eee';
-        area.value = item.content || '// Your code here\nprint("Hello World");';
+        area.style.height = '100px';
+        area.value = item.content || '';
+        area.placeholder = 'myRandomNumberGenerator()';
         area.oninput = () => {
             item.content = area.value;
             saveData();
@@ -422,28 +449,28 @@
 
         const runBtn = document.createElement('button');
         runBtn.className = 'btn-primary';
-        runBtn.innerText = 'Run Code';
+        runBtn.innerText = 'Run Function';
         
         const consoleOut = document.createElement('div');
         consoleOut.className = 'console-box';
         consoleOut.id = 'script-console';
 
         runBtn.onclick = () => {
-            consoleOut.innerText = ''; // clear
+            consoleOut.innerText = '> Executing...';
             
-            // Custom print function
-            const print = (msg) => {
-                consoleOut.innerText += msg + '\n';
-            };
-
             try {
-                // Safe-ish eval using Function constructor
-                // We pass 'print' and the 'db' (read-only if we wanted, but let's give full access)
-                const func = new Function('print', 'db', item.content);
-                func(print, db);
-                print("--- Execution Finished ---");
+                // We assume the user types a function call available in global scope (from library.js)
+                // We use eval() here to allow the user to type "func(1, 2)"
+                const result = window.eval(item.content); 
+                
+                if(result !== undefined) {
+                    consoleOut.innerText = '> Result: ' + result;
+                } else {
+                    consoleOut.innerText = '> Done (No return value)';
+                }
             } catch (err) {
-                print("ERROR: " + err.message);
+                consoleOut.innerText = '> ERROR: ' + err.message;
+                consoleOut.innerText += '\n> (Did you create library.js?)';
             }
         };
 
@@ -476,7 +503,7 @@
         const item = db.items.find(i => i.id === currentItemId);
         item.content[index].val = val;
         saveData();
-        openItem(currentItemId); // refresh for UI updates like progress bar width
+        openItem(currentItemId); 
     }
     function updateTaskGroup(index, val) {
         const item = db.items.find(i => i.id === currentItemId);
@@ -485,7 +512,6 @@
     }
     function updateTaskRadio(index, group) {
         const item = db.items.find(i => i.id === currentItemId);
-        // Uncheck others in group
         item.content.forEach(t => {
             if(t.type === 'radio' && t.group === group) t.val = false;
         });
@@ -503,42 +529,69 @@
     // --- CELL HELPERS ---
     function addCell() {
         const item = db.items.find(i => i.id === currentItemId);
-        item.content.push({ text: '', color: '#ffeb3b' }); // default sticky yellow
+        item.content.push({ text: '', color: '#ffeb3b' }); 
         saveData();
         openItem(currentItemId);
     }
 
-    // --- MODAL & CREATE ---
+    // --- MODAL & CREATE (UPDATED) ---
     function openCreateModal() {
         document.getElementById('modal-create').classList.add('active');
-        const sel = document.getElementById('new-cat');
-        sel.innerHTML = '';
-        db.categories.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.innerText = c.name;
-            sel.appendChild(opt);
-        });
+        // Clear inputs
+        document.getElementById('new-title').value = '';
+        document.getElementById('new-desc').value = '';
+        document.getElementById('new-cat-str').value = '';
     }
 
     function createItem() {
         const title = document.getElementById('new-title').value || 'Untitled';
+        const desc = document.getElementById('new-desc').value || '';
         const type = document.getElementById('new-type').value;
-        const cat = document.getElementById('new-cat').value;
+        const catStr = document.getElementById('new-cat-str').value;
+
+        // Process Categories (Split by ;)
+        let finalCatIds = [];
+        
+        if (catStr.trim() === "") {
+             // Default if empty
+            finalCatIds.push(db.categories[0].id);
+        } else {
+            const rawCats = catStr.split(';').map(s => s.trim()).filter(s => s !== "");
+            
+            rawCats.forEach(catName => {
+                // Check if exists
+                let existingCat = db.categories.find(c => c.name.toLowerCase() === catName.toLowerCase());
+                if(existingCat) {
+                    finalCatIds.push(existingCat.id);
+                } else {
+                    // Create new category automatically
+                    const newId = 'cat_' + Date.now() + Math.floor(Math.random()*1000);
+                    db.categories.push({
+                        id: newId,
+                        name: catName,
+                        visible: true,
+                        priority: db.categories.length + 1
+                    });
+                    finalCatIds.push(newId);
+                }
+            });
+        }
 
         const newItem = {
             id: crypto.randomUUID(),
             created: Date.now(),
             title: title,
+            desc: desc,
             type: type,
-            catId: cat,
+            catIds: finalCatIds, // New Array format
             content: (type === 'task' || type === 'cells') ? [] : ''
         };
 
-        db.items.unshift(newItem); // Add to top
+        db.items.unshift(newItem); 
         saveData();
         closeModals();
         renderList();
+        renderCatManager(); // Update cat manager in case we added new ones
     }
 
     function closeModals() {
@@ -598,12 +651,10 @@
         const swapIdx = idx + dir;
         if(swapIdx < 0 || swapIdx >= db.categories.length) return;
         
-        // Swap priority values
         const temp = db.categories[idx].priority;
         db.categories[idx].priority = db.categories[swapIdx].priority;
         db.categories[swapIdx].priority = temp;
         
-        // Re-sort array
         db.categories.sort((a,b) => a.priority - b.priority);
         
         saveData();
@@ -629,7 +680,6 @@
         reader.onload = function(e) {
             try {
                 const loaded = JSON.parse(e.target.result);
-                // Basic validation
                 if(loaded.items && loaded.categories) {
                     db = loaded;
                     saveData();
@@ -646,24 +696,14 @@
     function exportCurrentItem() {
         const item = db.items.find(i => i.id === currentItemId);
         const json = JSON.stringify(item);
-        // Copy to clipboard or show in modal
-        // Since mobile clipboard can be flaky, let's just show prompt or alert
-        // Better: Use prompt so user can copy easily
-        // Even better: Use navigator.clipboard if available, else prompt
         navigator.clipboard.writeText(json).then(() => {
             alert("Item JSON copied to clipboard!");
         }).catch(() => {
             prompt("Copy this JSON:", json);
         });
     }
-    
-    // Hidden Import Button (add to UI if you want, currently manual via console or add button)
-    // Let's add an Import button to list header for "Item Import"
-    // I added it to the "+" modal or header? Let's add a button in the top right.
-    // For now, I'll trigger it via a new button in the list header I missed.
-    // Let's repurpose the Create Modal to have an "Import from JSON" link, or just add a button next to create.
-    
-    // Adding Import Button Logic dynamically
+
+    // New Header Import Button
     const headerBtns = document.querySelector('#list-header div:last-child');
     const impBtn = document.createElement('button');
     impBtn.className = 'btn-icon';
@@ -675,9 +715,8 @@
         const str = document.getElementById('import-area').value;
         try {
             const partial = JSON.parse(str);
-            // It might be a full DB or a single item. Assuming single item per request.
             if(partial.title && partial.type) {
-                partial.id = crypto.randomUUID(); // NEW ID
+                partial.id = crypto.randomUUID(); 
                 partial.created = Date.now();
                 db.items.unshift(partial);
                 saveData();
@@ -706,7 +745,7 @@
         db.items = db.items.filter(i => !ids.includes(i.id));
         saveData();
         renderList();
-        toggleSelectMode(); // Exit mode
+        toggleSelectMode(); 
     }
 
     function esc(str) {
@@ -716,4 +755,4 @@
 
 </script>
 </body>
-  </html>
+</html>
