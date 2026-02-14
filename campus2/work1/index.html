@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Grid Calculator (Toggle Steps)</title>
+    
+    <!-- MathJax untuk render rumus LaTeX -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root {
+            /* Light Mode (High Contrast) */
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --panel-bg: #f0f0f0;
+            --grid-line: #000000;
+            --grid-text: #000000;
+            --flag-1: #ff0000; /* Merah */
+            --flag-2: #0000ff; /* Biru */
+            --highlight: #ffff00; /* Kuning terang */
+            --btn-bg: #000000;
+            --btn-text: #ffffff;
+            --border-color: #000000;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Mode (High Contrast) */
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --panel-bg: #1a1a1a;
+            --grid-line: #ffffff;
+            --grid-text: #ffffff;
+            --flag-1: #ff5555;
+            --flag-2: #5555ff;
+            --highlight: #444444; /* Abu terang */
+            --btn-bg: #ffffff;
+            --btn-text: #000000;
+            --border-color: #ffffff;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Layout */
+        #left-panel {
+            flex: 1;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+            border-right: 4px solid var(--border-color);
+        }
+
+        #left-panel:active {
+            cursor: grabbing;
+        }
+
+        #right-panel {
+            width: 400px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border-left: 1px solid var(--border-color);
+        }
+
+        /* Canvas */
+        canvas {
+            display: block;
+        }
+
+        /* UI Elements */
+        h2, h3 { margin-top: 0; }
+        
+        .info-box {
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            background: var(--bg-color);
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        button {
+            padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+            border: 2px solid var(--border-color);
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        #steps-container {
+            margin-top: 10px;
+            padding: 10px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-color);
+            display: none; /* Hidden by default */
+            font-size: 0.95em;
+        }
+
+        .step-line {
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        /* Utility */
+        .hidden { display: none; }
+        .error-text { color: red; font-weight: bold; }
+        [data-theme="dark"] .error-text { color: #ff5555; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Panel Kiri: Grid Canvas -->
+    <div id="left-panel">
+        <canvas id="gridCanvas"></canvas>
+        <div style="position: absolute; top: 10px; left: 10px; background: var(--bg-color); padding: 5px; border: 2px solid var(--border-color); pointer-events: none;">
+            Drag untuk geser. Klik untuk taruh Flag.
+        </div>
+    </div>
+
+    <!-- Panel Kanan: Kontrol & Info -->
+    <div id="right-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Panel Kontrol</h2>
+            <button id="themeToggle">Mode Gelap/Terang</button>
+        </div>
+
+        <div class="info-box">
+            <div class="info-row"><span>Flag 1 (x1, y1):</span> <span id="val-p1">-</span></div>
+            <div class="info-row"><span>Flag 2 (x2, y2):</span> <span id="val-p2">-</span></div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-row"><span>dx (|x2-x1|):</span> <span id="val-dx">-</span></div>
+            <div class="info-row"><span>dy (|y2-y1|):</span> <span id="val-dy">-</span></div>
+            <div class="info-row"><span>m (Gradien):</span> <span id="val-m">-</span></div>
+            <div class="info-row"><span>c (Intercept):</span> <span id="val-c">-</span></div>
+        </div>
+
+        <button id="btn-show-steps" disabled>Tampilkan Langkah Perhitungan</button>
+
+        <div id="steps-container">
+            <h3>Langkah Perhitungan:</h3>
+            <div id="math-output"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Konfigurasi & State ---
+        const canvas = document.getElementById('gridCanvas');
+        const ctx = canvas.getContext('2d');
+        const leftPanel = document.getElementById('left-panel');
+        
+        let width, height;
+        const cellSize = 50; 
+        
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let lastMouseX, lastMouseY;
+
+        let flags = []; 
+        let theme = 'light';
+
+        // --- Inisialisasi ---
+        function resize() {
+            width = leftPanel.clientWidth;
+            height = leftPanel.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+            draw();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Event Listeners ---
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = false;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            
+            const initialX = e.clientX;
+            const initialY = e.clientY;
+
+            const onMouseMove = (ev) => {
+                const dx = ev.clientX - lastMouseX;
+                const dy = ev.clientY - lastMouseY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) isDragging = true;
+                
+                if (isDragging) {
+                    offsetX += dx;
+                    offsetY += dy;
+                    lastMouseX = ev.clientX;
+                    lastMouseY = ev.clientY;
+                    draw();
+                }
+            };
+
+            const onMouseUp = (ev) => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+
+                if (!isDragging) {
+                    handleGridClick(initialX, initialY);
+                }
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            theme = theme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            draw();
+        });
+
+        // --- LOGIKA TOMBOL TOGGLE (UPDATED) ---
+        document.getElementById('btn-show-steps').addEventListener('click', () => {
+            const container = document.getElementById('steps-container');
+            const btn = document.getElementById('btn-show-steps');
+
+            if (container.style.display === 'none' || container.style.display === '') {
+                // Jika sedang sembunyi, maka TAMPILKAN
+                generateSteps();
+                container.style.display = 'block';
+                btn.textContent = "Sembunyikan Langkah Perhitungan";
+            } else {
+                // Jika sedang tampil, maka SEMBUNYIKAN
+                container.style.display = 'none';
+                btn.textContent = "Tampilkan Langkah Perhitungan";
+            }
+        });
+
+        // --- Logika Grid ---
+
+        function handleGridClick(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+
+            const gridX = Math.floor((x - centerX) / cellSize);
+            const gridY = Math.floor((y - centerY) / cellSize);
+
+            const existingIndex = flags.findIndex(f => f.x === gridX && f.y === gridY);
+
+            if (existingIndex !== -1) {
+                flags.splice(existingIndex, 1);
+            } else {
+                if (flags.length < 2) {
+                    flags.push({ x: gridX, y: gridY });
+                } else {
+                    flags.shift(); 
+                    flags.push({ x: gridX, y: gridY });
+                }
+            }
+
+            updateInfo();
+            draw();
+        }
+
+        // --- Algoritma Garis Bresenham ---
+        function getBresenhamLine(x0, y0, x1, y1) {
+            let points = [];
+            let dx = Math.abs(x1 - x0);
+            let dy = Math.abs(y1 - y0);
+            let sx = (x0 < x1) ? 1 : -1;
+            let sy = (y0 < y1) ? 1 : -1;
+            let err = dx - dy;
+
+            while (true) {
+                points.push({x: x0, y: y0});
+                
+                if (x0 === x1 && y0 === y1) break;
+                
+                let e2 = 2 * err;
+                if (e2 > -dy) {
+                    err -= dy;
+                    x0 += sx;
+                }
+                if (e2 < dx) {
+                    err += dx;
+                    y0 += sy;
+                }
+            }
+            return points;
+        }
+
+        // --- Rendering ---
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            
+            const style = getComputedStyle(document.body);
+            const gridColor = style.getPropertyValue('--grid-line').trim();
+            const highlightColor = style.getPropertyValue('--highlight').trim();
+            const flag1Color = style.getPropertyValue('--flag-1').trim();
+            const flag2Color = style.getPropertyValue('--flag-2').trim();
+            const textColor = style.getPropertyValue('--grid-text').trim();
+
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+
+            // 1. Gambar Highlight Background (Piksel Jalur)
+            if (flags.length === 2) {
+                const f1 = flags[0];
+                const f2 = flags[1];
+                
+                const pathPoints = getBresenhamLine(f1.x, f1.y, f2.x, f2.y);
+
+                ctx.fillStyle = highlightColor;
+                pathPoints.forEach(p => {
+                    const px = centerX + p.x * cellSize;
+                    const py = centerY + p.y * cellSize;
+                    ctx.fillRect(px, py, cellSize, cellSize);
+                });
+            }
+
+            // 2. Gambar Grid Lines
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = gridColor;
+            ctx.beginPath();
+
+            const startCol = Math.floor(-centerX / cellSize);
+            const endCol = Math.floor((width - centerX) / cellSize) + 1;
+            const startRow = Math.floor(-centerY / cellSize);
+            const endRow = Math.floor((height - centerY) / cellSize) + 1;
+
+            for (let i = startCol; i <= endCol; i++) {
+                const x = centerX + i * cellSize;
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let i = startRow; i <= endRow; i++) {
+                const y = centerY + i * cellSize;
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+
+            // 3. Gambar Sumbu Utama (Axis)
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const axisX = centerX;
+            if (axisX >= 0 && axisX <= width) {
+                ctx.moveTo(axisX, 0);
+                ctx.lineTo(axisX, height);
+            }
+            const axisY = centerY;
+            if (axisY >= 0 && axisY <= height) {
+                ctx.moveTo(0, axisY);
+                ctx.lineTo(width, axisY);
+            }
+            ctx.stroke();
+
+            // 4. Label (0,0)
+            ctx.fillStyle = textColor;
+            ctx.font = '12px Arial';
+            ctx.fillText("(0,0)", centerX + 5, centerY - 5);
+
+            // 5. Gambar Flags
+            flags.forEach((f, index) => {
+                const fx = centerX + f.x * cellSize;
+                const fy = centerY + f.y * cellSize;
+                
+                ctx.fillStyle = index === 0 ? flag1Color : flag2Color;
+                ctx.fillRect(fx + 4, fy + 4, cellSize - 8, cellSize - 8);
+                
+                ctx.fillStyle = "#ffffff"; 
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(`P${index+1}`, fx + cellSize/4, fy + cellSize/1.5);
+                
+                ctx.font = "10px Arial";
+                ctx.fillText(`${f.x},${-f.y}`, fx + 2, fy - 2); 
+            });
+        }
+
+        // --- Logika Kalkulasi ---
+
+        function updateInfo() {
+            const elP1 = document.getElementById('val-p1');
+            const elP2 = document.getElementById('val-p2');
+            const elDx = document.getElementById('val-dx');
+            const elDy = document.getElementById('val-dy');
+            const elM = document.getElementById('val-m');
+            const elC = document.getElementById('val-c');
+            const btnSteps = document.getElementById('btn-show-steps');
+            const stepsContainer = document.getElementById('steps-container');
+
+            // Reset Tampilan
+            elP1.textContent = '-';
+            elP2.textContent = '-';
+            elDx.textContent = '-';
+            elDy.textContent = '-';
+            elM.textContent = '-';
+            elC.textContent = '-';
+            
+            // Reset Tombol dan Container ke posisi awal (Hidden)
+            btnSteps.disabled = true;
+            btnSteps.textContent = "Tampilkan Langkah Perhitungan"; // Reset teks tombol
+            stepsContainer.style.display = 'none';
+
+            if (flags.length > 0) {
+                const p1 = { x: flags[0].x, y: -flags[0].y };
+                elP1.textContent = `(${p1.x}, ${p1.y})`;
+
+                if (flags.length === 2) {
+                    const p2 = { x: flags[1].x, y: -flags[1].y };
+                    elP2.textContent = `(${p2.x}, ${p2.y})`;
+
+                    const dx = Math.abs(p2.x - p1.x);
+                    const dy = Math.abs(p2.y - p1.y);
+                    
+                    elDx.textContent = dx;
+                    elDy.textContent = dy;
+
+                    const deltaX = p2.x - p1.x;
+                    const deltaY = p2.y - p1.y;
+
+                    let m, c;
+
+                    if (deltaX === 0) {
+                        elM.textContent = "Undefined (∞)";
+                        elC.textContent = "Tidak ada (x = " + p1.x + ")";
+                    } else {
+                        m = deltaY / deltaX;
+                        c = p1.y - (m * p1.x);
+                        
+                        elM.textContent = Number.isInteger(m) ? m : m.toFixed(2);
+                        elC.textContent = Number.isInteger(c) ? c : c.toFixed(2);
+                    }
+
+                    btnSteps.disabled = false;
+                }
+            }
+        }
+
+        function generateSteps() {
+            const output = document.getElementById('math-output');
+            
+            const p1 = { x: flags[0].x, y: -flags[0].y };
+            const p2 = { x: flags[1].x, y: -flags[1].y };
+            
+            const deltaX = p2.x - p1.x;
+            const deltaY = p2.y - p1.y;
+            const dx_abs = Math.abs(deltaX);
+            const dy_abs = Math.abs(deltaY);
+
+            let html = '';
+
+            // 1. Identifikasi Titik
+            html += `<div class="step-line">
+                <strong>1. Identifikasi Titik:</strong><br>
+                $$ P_1 = (x_1, y_1) = (${p1.x}, ${p1.y}) $$
+                $$ P_2 = (x_2, y_2) = (${p2.x}, ${p2.y}) $$
+            </div>`;
+
+            // 2. Hitung Delta
+            html += `<div class="step-line">
+                <strong>2. Hitung Jarak (Delta):</strong><br>
+                $$ dx = |x_2 - x_1| = |${p2.x} - ${p1.x}| = |${deltaX}| = ${dx_abs} $$
+                $$ dy = |y_2 - y_1| = |${p2.y} - ${p1.y}| = |${deltaY}| = ${dy_abs} $$
+            </div>`;
+
+            // 3. Hitung Gradien (m)
+            html += `<div class="step-line"><strong>3. Hitung Gradien ($m$):</strong><br>`;
+            
+            if (deltaX === 0) {
+                html += `Rumus gradien: $$ m = \\frac{y_2 - y_1}{x_2 - x_1} $$
+                         Substitusi: $$ m = \\frac{${p2.y} - (${p1.y})}{${p2.x} - ${p1.x}} = \\frac{${deltaY}}{0} $$
+                         <span class="error-text">BUG DETECTED: Pembagian dengan nol!</span><br>
+                         Garis ini adalah garis vertikal. Secara matematis gradien tidak terdefinisi.`;
+            } else {
+                const m = deltaY / deltaX;
+                const m_display = Number.isInteger(m) ? m : m.toFixed(2);
+                
+                html += `Rumus gradien: $$ m = \\frac{y_2 - y_1}{x_2 - x_1} $$
+                         Substitusi: $$ m = \\frac{${p2.y} - ${p1.y}}{${p2.x} - ${p1.x}} $$
+                         $$ m = \\frac{${deltaY}}{${deltaX}} = ${m_display} $$`;
+                
+                // 4. Hitung Konstanta (c)
+                html += `</div><div class="step-line"><strong>4. Hitung Konstanta ($c$):</strong><br>`;
+                const c = p1.y - (m * p1.x);
+                const c_display = Number.isInteger(c) ? c : c.toFixed(2);
+
+                html += `Rumus: $$ c = y_1 - m \\cdot x_1 $$
+                         Substitusi: $$ c = ${p1.y} - (${m_display} \\cdot ${p1.x}) $$
+                         $$ c = ${p1.y} - (${(m * p1.x).toFixed(2)}) $$
+                         $$ c = ${c_display} $$`;
+
+                // 5. Persamaan Akhir
+                html += `</div><div><strong>5. Persamaan Garis:</strong><br>
+                         $$ y = mx + c $$
+                         $$ y = ${m_display}x + (${c_display}) $$`;
+            }
+            html += `</div>`;
+
+            output.innerHTML = html;
+
+            MathJax.typesetPromise([output]).then(() => {
+                const rightPanel = document.getElementById('right-panel');
+                rightPanel.scrollTop = rightPanel.scrollHeight;
+            });
+        }
+
+    </script>
+</body>
+</html>

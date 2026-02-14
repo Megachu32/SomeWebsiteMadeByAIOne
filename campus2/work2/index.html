@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midpoint Line Algorithm Calculator</title>
+    
+    <!-- MathJax untuk render rumus LaTeX -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root {
+            /* Light Mode (High Contrast) */
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --panel-bg: #f0f0f0;
+            --grid-line: #000000;
+            --grid-text: #000000;
+            --flag-1: #ff0000; /* Merah */
+            --flag-2: #0000ff; /* Biru */
+            --highlight: #ffff00; /* Kuning terang */
+            --btn-bg: #000000;
+            --btn-text: #ffffff;
+            --border-color: #000000;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Mode (High Contrast) */
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --panel-bg: #1a1a1a;
+            --grid-line: #ffffff;
+            --grid-text: #ffffff;
+            --flag-1: #ff5555;
+            --flag-2: #5555ff;
+            --highlight: #444444; /* Abu terang */
+            --btn-bg: #ffffff;
+            --btn-text: #000000;
+            --border-color: #ffffff;
+        }
+
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Layout */
+        #left-panel {
+            flex: 1;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+            border-right: 4px solid var(--border-color);
+        }
+
+        #left-panel:active {
+            cursor: grabbing;
+        }
+
+        #right-panel {
+            width: 450px; /* Sedikit diperlebar untuk tabel */
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border-left: 1px solid var(--border-color);
+        }
+
+        /* Canvas */
+        canvas {
+            display: block;
+        }
+
+        /* UI Elements */
+        h2, h3 { margin-top: 0; }
+        
+        .info-box {
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            background: var(--bg-color);
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        button {
+            padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+            border: 2px solid var(--border-color);
+            text-transform: uppercase;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        #steps-container {
+            margin-top: 10px;
+            padding: 10px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-color);
+            display: none; /* Hidden by default */
+            font-size: 0.95em;
+        }
+
+        .step-line {
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        /* Table Styles untuk Kalkulasi */
+        .calc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.9em;
+            font-family: monospace;
+        }
+        .calc-table th, .calc-table td {
+            border: 1px solid var(--border-color);
+            padding: 4px;
+            text-align: center;
+        }
+        .calc-table th {
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+        }
+        .calc-table tr:nth-child(even) {
+            background-color: rgba(128, 128, 128, 0.1);
+        }
+
+        /* Utility */
+        .hidden { display: none; }
+        .error-text { color: red; font-weight: bold; }
+        [data-theme="dark"] .error-text { color: #ff5555; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Panel Kiri: Grid Canvas -->
+    <div id="left-panel">
+        <canvas id="gridCanvas"></canvas>
+        <div style="position: absolute; top: 10px; left: 10px; background: var(--bg-color); padding: 5px; border: 2px solid var(--border-color); pointer-events: none;">
+            Drag untuk geser. Klik untuk taruh Flag.
+        </div>
+    </div>
+
+    <!-- Panel Kanan: Kontrol & Info -->
+    <div id="right-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Panel Kontrol</h2>
+            <button id="themeToggle">Mode Gelap/Terang</button>
+        </div>
+
+        <div class="info-box">
+            <div class="info-row"><span>Flag 1 (x1, y1):</span> <span id="val-p1">-</span></div>
+            <div class="info-row"><span>Flag 2 (x2, y2):</span> <span id="val-p2">-</span></div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-row"><span>dx (|x2-x1|):</span> <span id="val-dx">-</span></div>
+            <div class="info-row"><span>dy (|y2-y1|):</span> <span id="val-dy">-</span></div>
+            <div class="info-row"><span>m (Gradien):</span> <span id="val-m">-</span></div>
+            <div class="info-row"><span>c (Intercept):</span> <span id="val-c">-</span></div>
+        </div>
+
+        <button id="btn-show-steps" disabled>Tampilkan Langkah Perhitungan</button>
+
+        <div id="steps-container">
+            <h3>Kalkulasi Midpoint Algorithm:</h3>
+            <div id="math-output"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Konfigurasi & State ---
+        const canvas = document.getElementById('gridCanvas');
+        const ctx = canvas.getContext('2d');
+        const leftPanel = document.getElementById('left-panel');
+        
+        let width, height;
+        const cellSize = 50; 
+        
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let lastMouseX, lastMouseY;
+
+        let flags = []; 
+        let theme = 'light';
+
+        // --- Inisialisasi ---
+        function resize() {
+            width = leftPanel.clientWidth;
+            height = leftPanel.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+            draw();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Event Listeners ---
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = false;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            
+            const initialX = e.clientX;
+            const initialY = e.clientY;
+
+            const onMouseMove = (ev) => {
+                const dx = ev.clientX - lastMouseX;
+                const dy = ev.clientY - lastMouseY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) isDragging = true;
+                
+                if (isDragging) {
+                    offsetX += dx;
+                    offsetY += dy;
+                    lastMouseX = ev.clientX;
+                    lastMouseY = ev.clientY;
+                    draw();
+                }
+            };
+
+            const onMouseUp = (ev) => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+
+                if (!isDragging) {
+                    handleGridClick(initialX, initialY);
+                }
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            theme = theme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            draw();
+        });
+
+        document.getElementById('btn-show-steps').addEventListener('click', () => {
+            const container = document.getElementById('steps-container');
+            const btn = document.getElementById('btn-show-steps');
+
+            if (container.style.display === 'none' || container.style.display === '') {
+                generateSteps();
+                container.style.display = 'block';
+                btn.textContent = "Sembunyikan Kalkulasi";
+            } else {
+                container.style.display = 'none';
+                btn.textContent = "Tampilkan Kalkulasi";
+            }
+        });
+
+        // --- Logika Grid ---
+
+        function handleGridClick(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+
+            const gridX = Math.floor((x - centerX) / cellSize);
+            const gridY = Math.floor((y - centerY) / cellSize);
+
+            const existingIndex = flags.findIndex(f => f.x === gridX && f.y === gridY);
+
+            if (existingIndex !== -1) {
+                flags.splice(existingIndex, 1);
+            } else {
+                if (flags.length < 2) {
+                    flags.push({ x: gridX, y: gridY });
+                } else {
+                    flags.shift(); 
+                    flags.push({ x: gridX, y: gridY });
+                }
+            }
+
+            updateInfo();
+            draw();
+        }
+
+        // --- ALGORITMA MIDPOINT (BRESENHAM OPTIMIZED) ---
+        function getMidpointLine(x1, y1, x2, y2) {
+            let points = [];
+            let steep = Math.abs(y2 - y1) > Math.abs(x2 - x1);
+            let x0_loc = x1, y0_loc = y1;
+            let x1_loc = x2, y1_loc = y2;
+
+            if (steep) {
+                [x0_loc, y0_loc] = [y0_loc, x0_loc];
+                [x1_loc, y1_loc] = [y1_loc, x1_loc];
+            }
+            if (x0_loc > x1_loc) {
+                [x0_loc, x1_loc] = [x1_loc, x0_loc];
+                [y0_loc, y1_loc] = [y1_loc, y0_loc];
+            }
+
+            let w = x1_loc - x0_loc;           
+            let h = Math.abs(y1_loc - y0_loc); 
+            let yStep = (y0_loc < y1_loc) ? 1 : -1;
+            let F = 2 * h - w;
+            let f_tetap = 2 * h;             
+            let f_ganti = 2 * (h - w);       
+            let y = y0_loc;
+
+            for (let x = x0_loc; x <= x1_loc; x++) {
+                if (steep) {
+                    points.push({x: y, y: x});
+                } else {
+                    points.push({x: x, y: y});
+                }
+
+                if (F < 0) {
+                    F += f_tetap;
+                } else {
+                    y += yStep;
+                    F += f_ganti;
+                }
+            }
+            return points;
+        }
+
+        // --- Rendering ---
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            
+            const style = getComputedStyle(document.body);
+            const gridColor = style.getPropertyValue('--grid-line').trim();
+            const highlightColor = style.getPropertyValue('--highlight').trim();
+            const flag1Color = style.getPropertyValue('--flag-1').trim();
+            const flag2Color = style.getPropertyValue('--flag-2').trim();
+            const textColor = style.getPropertyValue('--grid-text').trim();
+
+            const centerX = width / 2 + offsetX;
+            const centerY = height / 2 + offsetY;
+
+            // 1. Gambar Highlight Background
+            if (flags.length === 2) {
+                const f1 = flags[0];
+                const f2 = flags[1];
+                const pathPoints = getMidpointLine(f1.x, f1.y, f2.x, f2.y);
+
+                ctx.fillStyle = highlightColor;
+                pathPoints.forEach(p => {
+                    const px = centerX + p.x * cellSize;
+                    const py = centerY + p.y * cellSize;
+                    ctx.fillRect(px, py, cellSize, cellSize);
+                });
+            }
+
+            // 2. Gambar Grid Lines
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = gridColor;
+            ctx.beginPath();
+
+            const startCol = Math.floor(-centerX / cellSize);
+            const endCol = Math.floor((width - centerX) / cellSize) + 1;
+            const startRow = Math.floor(-centerY / cellSize);
+            const endRow = Math.floor((height - centerY) / cellSize) + 1;
+
+            for (let i = startCol; i <= endCol; i++) {
+                const x = centerX + i * cellSize;
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let i = startRow; i <= endRow; i++) {
+                const y = centerY + i * cellSize;
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+
+            // 3. Gambar Sumbu Utama
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const axisX = centerX;
+            if (axisX >= 0 && axisX <= width) {
+                ctx.moveTo(axisX, 0);
+                ctx.lineTo(axisX, height);
+            }
+            const axisY = centerY;
+            if (axisY >= 0 && axisY <= height) {
+                ctx.moveTo(0, axisY);
+                ctx.lineTo(width, axisY);
+            }
+            ctx.stroke();
+
+            // 4. Label (0,0)
+            ctx.fillStyle = textColor;
+            ctx.font = '12px Arial';
+            ctx.fillText("(0,0)", centerX + 5, centerY - 5);
+
+            // 5. Gambar Flags
+            flags.forEach((f, index) => {
+                const fx = centerX + f.x * cellSize;
+                const fy = centerY + f.y * cellSize;
+                
+                ctx.fillStyle = index === 0 ? flag1Color : flag2Color;
+                ctx.fillRect(fx + 4, fy + 4, cellSize - 8, cellSize - 8);
+                
+                ctx.fillStyle = "#ffffff"; 
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(`P${index+1}`, fx + cellSize/4, fy + cellSize/1.5);
+                
+                ctx.font = "10px Arial";
+                ctx.fillText(`${f.x},${-f.y}`, fx + 2, fy - 2); 
+            });
+        }
+
+        // --- Logika Kalkulasi & Info UI ---
+
+        function updateInfo() {
+            const elP1 = document.getElementById('val-p1');
+            const elP2 = document.getElementById('val-p2');
+            const elDx = document.getElementById('val-dx');
+            const elDy = document.getElementById('val-dy');
+            const elM = document.getElementById('val-m');
+            const elC = document.getElementById('val-c');
+            const btnSteps = document.getElementById('btn-show-steps');
+            const stepsContainer = document.getElementById('steps-container');
+
+            elP1.textContent = '-';
+            elP2.textContent = '-';
+            elDx.textContent = '-';
+            elDy.textContent = '-';
+            elM.textContent = '-';
+            elC.textContent = '-';
+            
+            btnSteps.disabled = true;
+            btnSteps.textContent = "Tampilkan Kalkulasi";
+            stepsContainer.style.display = 'none';
+
+            if (flags.length > 0) {
+                const p1 = { x: flags[0].x, y: -flags[0].y };
+                elP1.textContent = `(${p1.x}, ${p1.y})`;
+
+                if (flags.length === 2) {
+                    const p2 = { x: flags[1].x, y: -flags[1].y };
+                    elP2.textContent = `(${p2.x}, ${p2.y})`;
+
+                    const dx = Math.abs(p2.x - p1.x);
+                    const dy = Math.abs(p2.y - p1.y);
+                    
+                    elDx.textContent = dx;
+                    elDy.textContent = dy;
+
+                    const deltaX = p2.x - p1.x;
+                    const deltaY = p2.y - p1.y;
+
+                    let m, c;
+
+                    if (deltaX === 0) {
+                        elM.textContent = "Undefined (∞)";
+                        elC.textContent = "Tidak ada (x = " + p1.x + ")";
+                    } else {
+                        m = deltaY / deltaX;
+                        c = p1.y - (m * p1.x);
+                        
+                        elM.textContent = Number.isInteger(m) ? m : m.toFixed(2);
+                        elC.textContent = Number.isInteger(c) ? c : c.toFixed(2);
+                    }
+
+                    btnSteps.disabled = false;
+                }
+            }
+        }
+
+        function generateSteps() {
+            const output = document.getElementById('math-output');
+            
+            // Gunakan koordinat Kartesius visual (y positif ke atas) untuk display text
+            const p1 = { x: flags[0].x, y: -flags[0].y };
+            const p2 = { x: flags[1].x, y: -flags[1].y };
+            
+            let html = '';
+
+            // --- SIMULASI LOGIKA MIDPOINT (Sama persis dengan getMidpointLine) ---
+            // Kita gunakan variabel lokal untuk perhitungan agar bisa dicatat
+            let x0 = p1.x, y0 = p1.y;
+            let x1 = p2.x, y1 = p2.y;
+            
+            let steep = Math.abs(y1 - y0) > Math.abs(x1 - x0);
+            let swapped_xy = steep; // Flag untuk display
+            let swapped_points = false;
+
+            if (steep) {
+                [x0, y0] = [y0, x0];
+                [x1, y1] = [y1, x1];
+            }
+            if (x0 > x1) {
+                [x0, x1] = [x1, x0];
+                [y0, y1] = [y1, y0];
+                swapped_points = true;
+            }
+
+            let w = x1 - x0;
+            let h = Math.abs(y1 - y0);
+            let yStep = (y0 < y1) ? 1 : -1;
+            
+            // Parameter Midpoint
+            let F = 2 * h - w;
+            let f_tetap = 2 * h;
+            let f_ganti = 2 * (h - w);
+
+            // --- OUTPUT HTML ---
+
+            // 1. Inisialisasi
+            html += `<div class="step-line">
+                <strong>1. Inisialisasi Titik:</strong><br>
+                $$ P_1 = (${p1.x}, ${p1.y}), \\quad P_2 = (${p2.x}, ${p2.y}) $$
+            </div>`;
+
+            // 2. Cek Kondisi
+            html += `<div class="step-line">
+                <strong>2. Pengecekan Kondisi (Transformasi):</strong><br>
+                Steep (Curam): ${steep ? "YA (Tukar x dan y)" : "TIDAK"}<br>
+                Arah: ${swapped_points ? "Kanan ke Kiri (Tukar P1 dan P2)" : "Kiri ke Kanan"}<br>
+            </div>`;
+
+            // 3. Parameter
+            html += `<div class="step-line">
+                <strong>3. Kalkulasi Parameter:</strong><br>
+                $$ W = x_{end} - x_{start} = ${w} $$
+                $$ H = |y_{end} - y_{start}| = ${h} $$
+                $$ F_{awal} = 2H - W = 2(${h}) - ${w} = ${F} $$
+            </div>`;
+
+            // 4. Tabel Iterasi
+            html += `<div><strong>4. Iterasi Piksel:</strong></div>`;
+            html += `<table class="calc-table">
+                        <thead>
+                            <tr>
+                                <th>x</th>
+                                <th>y</th>
+                                <th>F (Saat Ini)</th>
+                                <th>Aksi</th>
+                                <th>Plot (x,y)</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            // Loop Simulasi
+            let currY = y0;
+            let currF = F;
+
+            for (let currX = x0; currX <= x1; currX++) {
+                // Tentukan koordinat asli untuk display
+                let plotX, plotY;
+                if (steep) {
+                    plotX = currY;
+                    plotY = currX;
+                } else {
+                    plotX = currX;
+                    plotY = currY;
+                }
+
+                let action = "";
+                let nextF = currF;
+
+                // Hitung next step (kecuali iterasi terakhir)
+                if (currX < x1) {
+                    if (currF < 0) {
+                        action = "F < 0 (Pilih E)";
+                        nextF += f_tetap;
+                    } else {
+                        action = "F ≥ 0 (Pilih NE/SE)";
+                        nextF += f_ganti;
+                    }
+                } else {
+                    action = "Selesai";
+                }
+
+                html += `<tr>
+                            <td>${currX}</td>
+                            <td>${currY}</td>
+                            <td>${currF}</td>
+                            <td>${action}</td>
+                            <td><strong>(${plotX}, ${plotY})</strong></td>
+                         </tr>`;
+
+                // Update nilai variabel loop simulasi
+                if (currX < x1) {
+                    if (currF < 0) {
+                        currF += f_tetap;
+                    } else {
+                        currY += yStep;
+                        currF += f_ganti;
+                    }
+                }
+            }
+
+            html += `</tbody></table>`;
+            
+            output.innerHTML = html;
+
+            MathJax.typesetPromise([output]).then(() => {
+                const rightPanel = document.getElementById('right-panel');
+                rightPanel.scrollTop = rightPanel.scrollHeight;
+            });
+        }
+
+    </script>
+</body>
+</html>
