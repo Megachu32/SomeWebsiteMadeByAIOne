@@ -30,10 +30,10 @@
     <canvas id="layar" width="600" height="600"></canvas>
     <div class="info">Vincentlie Tanoto - 224117144</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    <!-- Tautan CDN diperbarui ke versi 3.4.1 untuk mendukung pemanggilan glMatrix -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/3.4.1/gl-matrix-min.js"></script>
 
     <script>
-        // Shader Setup
         const vs_text = `#version 300 es
         precision mediump float;
         in vec4 koordinat_vertex;
@@ -73,7 +73,7 @@
         gl.linkProgram(prog);
         gl.useProgram(prog);
 
-        // Geometri Huruf V (Dibangun disekitar titik origin 0,0)
+        // Geometri Huruf V (Centered)
         const verticesV = new Float32Array([
             // Sisi Kiri
             -0.3,  0.4,   -0.1,  0.4,    0.0, -0.4,
@@ -91,7 +91,7 @@
             1,0,0,1,  0.5,0,1,1,  0,0,1,1
         ]);
 
-        // Geometri Huruf T (Dibangun disekitar titik origin 0,0)
+        // Geometri Huruf T (Centered)
         const verticesT = new Float32Array([
             // Garis Atas
             -0.3,  0.4,    0.3,  0.4,    0.3,  0.2,
@@ -120,24 +120,19 @@
 
         let sudut = 0;
         const { mat4 } = glMatrix;
-        const matrix = mat4.create(); //
+        const matrix = mat4.create(); 
 
         function drawShape(vertices, colors, count, posX, rotationDir) {
-            // Memasukkan Posisi
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferPos);
             gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
             gl.vertexAttribPointer(attrPos, 2, gl.FLOAT, false, 0, 0);
 
-            // Memasukkan Warna Dinamis
             gl.bindBuffer(gl.ARRAY_BUFFER, bufferCol);
             gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
             gl.vertexAttribPointer(attrCol, 4, gl.FLOAT, false, 0, 0);
 
-            // Kalkulasi Matriks
             mat4.identity(matrix);
-            // Geser ke posisi di layar (Kiri/Kanan)
             mat4.translate(matrix, matrix, [posX, 0, 0]);
-            // Rotasi berpusat pada sumbu lokal bentuk tersebut
             mat4.rotateZ(matrix, matrix, rotationDir * (Math.PI * sudut / 180));
             
             gl.uniformMatrix4fv(matLoc, false, matrix);
@@ -148,17 +143,13 @@
             gl.clearColor(0.1, 0.1, 0.1, 1.0);
             gl.clear(gl.COLOR_BUFFER_BIT);
 
-            // Render V di sebelah kiri (-0.4), putar searah jarum jam (-1)
             drawShape(verticesV, warnaV, 12, -0.4, -1);
-
-            // Render T di sebelah kanan (0.4), putar berlawanan arah jarum jam (1)
             drawShape(verticesT, warnaT, 12, 0.4, 1);
 
             sudut = (sudut + 1) % 360;
-            requestAnimationFrame(render); //
+            requestAnimationFrame(render); 
         }
 
-        // Mulai animasi
         render();
     </script>
 </body>
