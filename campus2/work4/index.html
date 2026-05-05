@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebGL VT Rotation - Vincentlie Tanoto</title>
+    <style>
+        body { 
+            margin: 0; 
+            background-color: #1a1a1a; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            font-family: sans-serif; 
+        }
+        canvas { 
+            border: 2px solid #444; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); 
+        }
+        .info { 
+            position: absolute; 
+            bottom: 10px; 
+            color: #888; 
+            font-size: 12px; 
+        }
+    </style>
+</head>
+<body>
+    <canvas id="layar" width="600" height="600"></canvas>
+    <div class="info">Vincentlie Tanoto - 224117144</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+
+    <script>
+        // Shader Setup
+        const vs_text = `#version 300 es
+        precision mediump float;
+        in vec4 koordinat_vertex;
+        in vec4 warna_vertex;
+        out vec4 gradasi;
+        uniform mat4 mat;
+        void main() {
+            gl_Position = mat * koordinat_vertex;
+            gradasi = warna_vertex;
+        }`;
+
+        const fs_text = `#version 300 es
+        precision mediump float;
+        in vec4 gradasi;
+        out vec4 warna;
+        void main() {
+            warna = gradasi;
+        }`;
+
+        const layar = document.getElementById('layar');
+        const gl = layar.getContext('webgl2');
+
+        if (!gl) { alert('WebGL2 tidak didukung'); }
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            return shader;
+        }
+
+        const vs = createShader(gl, gl.VERTEX_SHADER, vs_text);
+        const fs = createShader(gl, gl.FRAGMENT_SHADER, fs_text);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        gl.useProgram(prog);
+
+        // Geometri Huruf V (Dibangun disekitar titik origin 0,0)
+        const verticesV = new Float32Array([
+            // Sisi Kiri
+            -0.3,  0.4,   -0.1,  0.4,    0.0, -0.4,
+            -0.1,  0.4,    0.1, -0.2,    0.0, -0.4,
+            // Sisi Kanan
+             0.3,  0.4,    0.1,  0.4,    0.0, -0.4,
+             0.1,  0.4,   -0.1, -0.2,    0.0, -0.4
+        ]);
+
+        // Gradasi V: Merah ke Biru
+        const warnaV = new Float32Array([
+            1,0,0,1,  1,0,0,1,  0,0,1,1,
+            1,0,0,1,  0,0.5,1,1,  0,0,1,1,
+            1,0,0,1,  1,0,0,1,  0,0,1,1,
+            1,0,0,1,  0.5,0,1,1,  0,0,1,1
+        ]);
+
+        // Geometri Huruf T (Dibangun disekitar titik origin 0,0)
+        const verticesT = new Float32Array([
+            // Garis Atas
+            -0.3,  0.4,    0.3,  0.4,    0.3,  0.2,
+            -0.3,  0.4,    0.3,  0.2,   -0.3,  0.2,
+            // Tiang Bawah
+            -0.1,  0.2,    0.1,  0.2,    0.1, -0.4,
+            -0.1,  0.2,    0.1, -0.4,   -0.1, -0.4
+        ]);
+
+        // Gradasi T: Hijau ke Kuning
+        const warnaT = new Float32Array([
+            0,1,0,1,  0,1,0,1,  1,1,0,1,
+            0,1,0,1,  1,1,0,1,  1,1,0,1,
+            1,1,0,1,  1,1,0,1,  0,0.5,0,1,
+            1,1,0,1,  0,0.5,0,1,  0,0.5,0,1
+        ]);
+
+        const bufferPos = gl.createBuffer();
+        const bufferCol = gl.createBuffer();
+        const attrPos = gl.getAttribLocation(prog, 'koordinat_vertex');
+        const attrCol = gl.getAttribLocation(prog, 'warna_vertex');
+        const matLoc = gl.getUniformLocation(prog, 'mat');
+
+        gl.enableVertexAttribArray(attrPos);
+        gl.enableVertexAttribArray(attrCol);
+
+        let sudut = 0;
+        const { mat4 } = glMatrix;
+        const matrix = mat4.create(); //
+
+        function drawShape(vertices, colors, count, posX, rotationDir) {
+            // Memasukkan Posisi
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferPos);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.vertexAttribPointer(attrPos, 2, gl.FLOAT, false, 0, 0);
+
+            // Memasukkan Warna Dinamis
+            gl.bindBuffer(gl.ARRAY_BUFFER, bufferCol);
+            gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+            gl.vertexAttribPointer(attrCol, 4, gl.FLOAT, false, 0, 0);
+
+            // Kalkulasi Matriks
+            mat4.identity(matrix);
+            // Geser ke posisi di layar (Kiri/Kanan)
+            mat4.translate(matrix, matrix, [posX, 0, 0]);
+            // Rotasi berpusat pada sumbu lokal bentuk tersebut
+            mat4.rotateZ(matrix, matrix, rotationDir * (Math.PI * sudut / 180));
+            
+            gl.uniformMatrix4fv(matLoc, false, matrix);
+            gl.drawArrays(gl.TRIANGLES, 0, count);
+        }
+
+        function render() {
+            gl.clearColor(0.1, 0.1, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Render V di sebelah kiri (-0.4), putar searah jarum jam (-1)
+            drawShape(verticesV, warnaV, 12, -0.4, -1);
+
+            // Render T di sebelah kanan (0.4), putar berlawanan arah jarum jam (1)
+            drawShape(verticesT, warnaT, 12, 0.4, 1);
+
+            sudut = (sudut + 1) % 360;
+            requestAnimationFrame(render); //
+        }
+
+        // Mulai animasi
+        render();
+    </script>
+</body>
+</html>
