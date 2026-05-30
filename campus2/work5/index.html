@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vincentlie's WebGL Project - Level Editor Mode</title>
+
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #1a1a1a;
+        color: white;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      #info {
+        position: absolute;
+        top: 10px;
+        width: 100%;
+        text-align: center;
+        z-index: 100;
+        pointer-events: none;
+        text-shadow: 1px 1px 2px black;
+      }
+
+      #crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 30px;
+        font-weight: bold;
+        z-index: 100;
+        pointer-events: none;
+        display: none;
+        user-select: none;
+      }
+
+      #blocker {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        z-index: 999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+      }
+
+      /* Styling for the Debug Copier */
+      #debug-ui {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.8);
+        border: 2px solid #00ffaa;
+        padding: 15px;
+        border-radius: 8px;
+        color: #00ffaa;
+        font-family: monospace;
+        font-size: 14px;
+        z-index: 1000;
+        cursor: pointer;
+        display: none;
+        user-select: none;
+      }
+      #debug-ui:hover {
+        background-color: rgba(0, 255, 170, 0.2);
+      }
+
+      /* [NEW] Styling for the Live Coordinate Display */
+      #coord-display {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background-color: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        border-radius: 5px;
+        color: #00ffaa;
+        font-family: monospace;
+        font-size: 14px;
+        z-index: 1000;
+        pointer-events: none; /* Allows clicks to pass through */
+        display: none; /* Hidden until game starts */
+      }
+    </style>
+  </head>
+  <body>
+    <div id="blocker">
+      <h1
+        style="
+          font-size: 40px;
+          cursor: pointer;
+          border: 2px solid #00ffaa;
+          padding: 15px 30px;
+          border-radius: 10px;
+          color: #00ffaa;
+          text-transform: uppercase;
+        "
+      >
+        ▶ Click To Play
+      </h1>
+      <p style="font-size: 1.2em">
+        <strong>WASD</strong> = Move | <strong>SPACE</strong> = Jump |
+        <strong>C</strong> = Crouch | <strong>Left Click</strong> = Interact |
+        <strong>P</strong> = Get Coordinates
+      </p>
+    </div>
+
+    <div id="info">
+      <h1>Project Base: Internet Cafe</h1>
+    </div>
+
+    <div id="crosshair">+</div>
+
+    <div id="coord-display">
+      X: 0.00 | Y: 0.00 | Z: 0.00<br />Yaw: 0.00 | Pitch: 0.00
+    </div>
+
+    <div id="debug-ui"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <script>
+      // ==============================================================================
+      // 1. CORE SETUP
+      // ==============================================================================
+      const scene = new THREE.Scene();
+
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000,
+      );
+      camera.position.y = 1.5;
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.body.appendChild(renderer.domElement);
+
+      // ==============================================================================
+      // 2. CONTROLS & UI
+      // ==============================================================================
+      const controls = new THREE.PointerLockControls(camera, document.body);
+      const blocker = document.getElementById("blocker");
+      const crosshair = document.getElementById("crosshair");
+      const debugUI = document.getElementById("debug-ui");
+      const coordDisplay = document.getElementById("coord-display");
+
+      blocker.addEventListener("click", function () {
+        controls.lock();
+      });
+      controls.addEventListener("lock", function () {
+        blocker.style.display = "none";
+        crosshair.style.display = "block";
+        coordDisplay.style.display = "block";
+      });
+      controls.addEventListener("unlock", function () {
+        blocker.style.display = "flex";
+        crosshair.style.display = "none";
+        coordDisplay.style.display = "none";
+      });
+
+      // Clipboard Copier Event
+      debugUI.addEventListener("click", function () {
+        navigator.clipboard.writeText(this.dataset.clipboard).then(() => {
+          this.innerText =
+            "✅ COPIED TO CLIPBOARD!\n\n" + this.dataset.clipboard;
+        });
+      });
+
+      const raycaster = new THREE.Raycaster();
+      const centerPosition = new THREE.Vector2(0, 0);
+
+      const interactableObjects = [];
+      const collidableObjects = [];
+
+      let scpTarget = null; // Variable to hold the SCP model
+
+      document.addEventListener("mousedown", (event) => {
+        if (event.button === 0 && controls.isLocked === true) {
+          raycaster.setFromCamera(centerPosition, camera);
+          const intersects = raycaster.intersectObjects(interactableObjects);
+
+          if (intersects.length > 0) {
+            const hitObject = intersects[0].object;
+
+            if (hitObject.userData.isDoorHitbox) {
+              hitObject.material.opacity = 0.3;
+              setTimeout(() => {
+                hitObject.material.opacity = 0;
+              }, 150);
+
+              const doorObj = hitObject.userData.doorReference;
+              if (doorObj) {
+                doorObj.userData.isClosed = !doorObj.userData.isClosed;
+                if (doorObj.userData.isClosed) {
+                  doorObj.visible = true;
+                  doorObj.userData.isSolid = true;
+                } else {
+                  doorObj.visible = false;
+                  doorObj.userData.isSolid = false;
+                }
+              }
+            } else if (hitObject.material && hitObject.material.color) {
+              const originalColor = hitObject.material.color.getHex();
+              hitObject.material.color.setHex(0xff0000);
+              setTimeout(() => {
+                hitObject.material.color.setHex(originalColor);
+              }, 150);
+            }
+          }
+        }
+      });
+
+      // ==============================================================================
+      // 3. MOVEMENT & PHYSICS VARIABLES
+      // ==============================================================================
+      let moveForward = false,
+        moveBackward = false,
+        moveLeft = false,
+        moveRight = false;
+      let canJump = false;
+      let isCrouching = false;
+
+      const velocity = new THREE.Vector3();
+      const direction = new THREE.Vector3();
+      const clock = new THREE.Clock();
+
+      const onKeyDown = function (event) {
+        switch (event.code) {
+          case "KeyW":
+            moveForward = true;
+            break;
+          case "KeyA":
+            moveLeft = true;
+            break;
+          case "KeyS":
+            moveBackward = true;
+            break;
+          case "KeyD":
+            moveRight = true;
+            break;
+          case "Space":
+            if (canJump === true) {
+              velocity.y = 10.0;
+              canJump = false;
+            }
+            break;
+          case "KeyC":
+            isCrouching = true;
+            break;
+          case "KeyP":
+            const pos = controls.getObject().position;
+            const rotY = camera.rotation.y;
+
+            const px = pos.x.toFixed(2);
+            const py = (pos.y - 1.5).toFixed(2);
+            const pz = pos.z.toFixed(2);
+            const ry = rotY.toFixed(2);
+
+            const snippet = `loadModel('[Folder Name]', 1, ${px}, ${py}, ${pz}, 0, ${ry}, 0, true);`;
+
+            debugUI.innerText = "📋 CLICK TO COPY PRESET:\n\n" + snippet;
+            debugUI.style.display = "block";
+            debugUI.dataset.clipboard = snippet;
+
+            if (window.debugTimeout) clearTimeout(window.debugTimeout);
+            window.debugTimeout = setTimeout(() => {
+              debugUI.style.display = "none";
+            }, 10000);
+            break;
+        }
+      };
+
+      const onKeyUp = function (event) {
+        switch (event.code) {
+          case "KeyW":
+            moveForward = false;
+            break;
+          case "KeyA":
+            moveLeft = false;
+            break;
+          case "KeyS":
+            moveBackward = false;
+            break;
+          case "KeyD":
+            moveRight = false;
+            break;
+          case "KeyC":
+            isCrouching = false;
+            break;
+        }
+      };
+
+      document.addEventListener("keydown", onKeyDown);
+      document.addEventListener("keyup", onKeyUp);
+
+      function getPlayerBox(cameraPos) {
+        const height = isCrouching ? 0.9 : 1.8;
+
+        const bottomY = cameraPos.y - (isCrouching ? 0.75 : 1.5) + 0.5;
+        const topY = cameraPos.y + 0.1;
+
+        return new THREE.Box3(
+          new THREE.Vector3(cameraPos.x - 0.3, bottomY, cameraPos.z - 0.3),
+          new THREE.Vector3(cameraPos.x + 0.3, topY, cameraPos.z + 0.3),
+        );
+      }
+
+      // ==============================================================================
+      // 4. LIGHTING & ENVIRONMENT
+      // ==============================================================================
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(10, 15, 10);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 2048;
+      directionalLight.shadow.mapSize.height = 2048;
+      scene.add(directionalLight);
+
+      const floorGeometry = new THREE.PlaneGeometry(100, 100);
+      const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      // ==============================================================================
+      // 5. THE BUILDING
+      // ==============================================================================
+      const wallMaterial = new THREE.MeshStandardMaterial({
+        color: 0x888888,
+        roughness: 0.8,
+        metalness: 0.1,
+      });
+
+      // [NEW] Load the floor texture
+      const textureLoader = new THREE.TextureLoader();
+      const floorTex = textureLoader.load("texture/floor.png");
+
+      // Tile the texture so it doesn't stretch blurrily across the massive room
+      floorTex.wrapS = THREE.RepeatWrapping;
+      floorTex.wrapT = THREE.RepeatWrapping;
+      floorTex.repeat.set(10, 10);
+
+      const innerFloorMaterial = new THREE.MeshStandardMaterial({
+        map: floorTex,
+        roughness: 0.8,
+      });
+
+      // [UPDATED] Added a customMaterial parameter so we can use different textures
+      function createWall(w, h, d, x, y, z, customMaterial = wallMaterial) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          customMaterial,
+        );
+        mesh.position.set(x, y, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData.isSolid = true;
+        scene.add(mesh);
+        collidableObjects.push(mesh);
+      }
+
+      createWall(1, 10, 40, -19.5, 5, 30); // Left Wall
+      createWall(1, 10, 40, 19.5, 5, 30); // Right Wall
+      createWall(40, 10, 1, 0, 5, 49.5); // Back Wall
+      createWall(40, 1, 40, 0, 10.5, 30); // Roof
+
+      createWall(19, 10, 1, -10.5, 5, 10.5); // Front Left
+      createWall(19, 10, 1, 10.5, 5, 10.5); // Front Right
+      createWall(2, 7.8, 1, 0, 6.1, 10.5); // Front Top Header
+
+      // Width/Depth is 38 so it fits exactly inside the 1-meter thick walls
+      // Y is 0.05 so it sits slightly above the main grey floor to prevent flickering
+      createWall(38, 0.1, 38, 0, 0.05, 30, innerFloorMaterial);
+
+      // ==============================================================================
+      // 6. INTERNET CAFE FURNITURE (COUNTER)
+      // ==============================================================================
+      const counterGeometry = new THREE.BoxGeometry(3, 1.0, 1);
+      const counterMaterial = new THREE.MeshStandardMaterial({
+        color: 0x5c4033,
+        roughness: 0.8,
+      });
+      const counter = new THREE.Mesh(counterGeometry, counterMaterial);
+
+      counter.position.set(-5, 0.5, 20);
+      counter.castShadow = true;
+      counter.receiveShadow = true;
+      counter.userData.isSolid = true;
+
+      scene.add(counter);
+      collidableObjects.push(counter);
+      interactableObjects.push(counter);
+
+      // ==============================================================================
+      // 7. PROXY HITBOX (The Invisible Door Click Target)
+      // ==============================================================================
+      const hitboxGeometry = new THREE.BoxGeometry(2, 2.2, 1);
+      const hitboxMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+
+      const doorHitbox = new THREE.Mesh(hitboxGeometry, hitboxMaterial);
+      doorHitbox.position.set(0, 1.1, 10.5);
+      doorHitbox.userData = { isDoorHitbox: true, doorReference: null };
+
+      scene.add(doorHitbox);
+      interactableObjects.push(doorHitbox);
+
+      // ==============================================================================
+      // 8. ASSET LOADER (DOOR & CUSTOM PRESET FUNCTION)
+      // ==============================================================================
+      const gltfLoader = new THREE.GLTFLoader();
+
+      // Load Custom Sliding Door (We keep this separate because it has custom Hitbox logic)
+      gltfLoader.load("asset/sliding_door/scene.gltf", function (gltf) {
+        const door = gltf.scene;
+        door.scale.set(1, 1, 1);
+        door.position.set(0, 0, 10.5);
+
+        door.userData = { isDoor: true, isSolid: true, isClosed: true };
+        collidableObjects.push(door);
+        doorHitbox.userData.doorReference = door;
+
+        door.traverse(function (node) {
+          if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+            if (node.material) {
+              node.material.metalness = 0.1;
+              node.material.roughness = 0.8;
+            }
+          }
+        });
+        scene.add(door);
+      });
+
+      // THE MASTER PRESET FUNCTION
+      function loadModel(
+        folderName,
+        scale,
+        posX,
+        posY,
+        posZ,
+        rotX,
+        rotY,
+        rotZ,
+        isSolid,
+      ) {
+        gltfLoader.load(
+          "asset/" + folderName + "/scene.gltf",
+          function (gltf) {
+            const model = gltf.scene;
+            model.scale.set(scale, scale, scale);
+            model.position.set(posX, posY, posZ);
+            model.rotation.set(rotX, rotY, rotZ);
+
+            model.userData.isSolid = isSolid;
+            if (isSolid) collidableObjects.push(model);
+
+            model.traverse(function (node) {
+              if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+                if (node.material) {
+                  node.material.metalness = 0.2;
+                  node.material.roughness = 0.8;
+                }
+              }
+            });
+            scene.add(model);
+            console.log(
+              `✅ Loaded [${folderName}] at ${posX}, ${posY}, ${posZ}`,
+            );
+
+            // [NEW] Hooks specifically for the SCP model
+            if (folderName === "scp-173") {
+              scpTarget = model;
+              scpTarget.userData.hasBeenLookedAt = false;
+              scpTarget.userData.isCurrentlyLookedAt = false;
+              scpTarget.userData.isFloating = false;
+              scpTarget.userData.velocityY = 0;
+            }
+          },
+          undefined,
+          function (error) {
+            console.error(`❌ Failed to load ${folderName}:`, error);
+          },
+        );
+      }
+
+      // --- MAP EDITOR: ADD YOUR PRESETS HERE ---
+      //   folderName,scale,posX,posY,posZ,rotX,rotY,rotZ,isSolid,
+      loadModel("cash_register", 0.5, -3.87, 1.05, 20.05, 0, -0.47, 0, true);
+      loadModel("scp-173", 0.12, -4.5, 0.005, 22.08, 0, -0.01, 0, true);
+      loadModel("computer", 0.0001, 12.49, 1.3, 15.65, 0, 1.38, 0, true);
+      loadModel("basic_keyboard", 2, 12.3, 0.85, 15.07, 0, -0.8, 0, true);
+      loadModel(
+        "computer_mouse_low-poly",
+        0.1,
+        12.79,
+        0.8,
+        15.0,
+        3.14,
+        0.77,
+        3.14,
+        true,
+      );
+      loadModel("gaming_table", 0.7, 12.45, -0.217, 15.95, 0, 1.5, 0, true);
+      loadModel("office_chair", 1, 14.89, 0.05, 15.93, 0, -1.36, 0, true);
+      loadModel("air_conditioner", 0.35, 0, 0.8, 11.1, 0, -1.57, 0, true);
+
+      // -----------------------------------------
+
+      // ==============================================================================
+      // 9. ANIMATION LOOP & PHYSICS ENGINE
+      // ==============================================================================
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const delta = clock.getDelta();
+
+        if (controls.isLocked === true) {
+          // ==========================================================================
+          // [NEW] SCP-173 VISIBILITY AND PHYSICS LOGIC
+          // ==========================================================================
+          if (scpTarget) {
+            // 1. Construct the camera's View Frustum (Vision Pyramid)
+            const frustum = new THREE.Frustum();
+            const projScreenMatrix = new THREE.Matrix4();
+            projScreenMatrix.multiplyMatrices(
+              camera.projectionMatrix,
+              camera.matrixWorldInverse,
+            );
+            frustum.setFromProjectionMatrix(projScreenMatrix);
+
+            // 2. Check if the SCP's Bounding Box intersects the Frustum
+            const scpBox = new THREE.Box3().setFromObject(scpTarget);
+            const isVisible = frustum.intersectsBox(scpBox);
+
+            if (isVisible) {
+              if (!scpTarget.userData.hasBeenLookedAt) {
+                scpTarget.userData.hasBeenLookedAt = true;
+              }
+              if (!scpTarget.userData.isCurrentlyLookedAt) {
+                scpTarget.userData.isCurrentlyLookedAt = true;
+                scpTarget.userData.isFloating = false; // Player is looking, gravity engages
+              }
+            } else {
+              if (
+                scpTarget.userData.hasBeenLookedAt &&
+                scpTarget.userData.isCurrentlyLookedAt
+              ) {
+                scpTarget.userData.isCurrentlyLookedAt = false;
+                scpTarget.userData.isFloating = true; // Player looked away, disable gravity
+
+                // Teleport up by half its height
+                const height = scpBox.max.y - scpBox.min.y;
+                scpTarget.position.y += height / 2;
+                scpTarget.userData.velocityY = 0; // Reset velocity
+              }
+            }
+
+            // 3. Apply gravity if the SCP is currently being looked at
+            if (
+              !scpTarget.userData.isFloating &&
+              scpTarget.userData.hasBeenLookedAt
+            ) {
+              scpTarget.userData.velocityY -= 40.0 * delta; // Match the player's gravity strength
+              scpTarget.position.y += scpTarget.userData.velocityY * delta;
+
+              // Prevent it from falling through the floor
+              if (scpTarget.position.y < 0) {
+                scpTarget.position.y = 0;
+                scpTarget.userData.velocityY = 0;
+              }
+            }
+          }
+          // ==========================================================================
+
+          velocity.x -= velocity.x * 10.0 * delta;
+          velocity.z -= velocity.z * 10.0 * delta;
+          velocity.y -= 40.0 * delta;
+
+          direction.z = Number(moveForward) - Number(moveBackward);
+          direction.x = Number(moveRight) - Number(moveLeft);
+          direction.normalize();
+
+          const currentSpeed = isCrouching ? 20.0 : 40.0;
+          if (moveForward || moveBackward)
+            velocity.z -= direction.z * currentSpeed * delta;
+          if (moveLeft || moveRight)
+            velocity.x -= direction.x * currentSpeed * delta;
+
+          const pos = controls.getObject().position;
+          const oldPos = pos.clone();
+
+          // Move X
+          controls.moveRight(-velocity.x * delta);
+          let playerBox = getPlayerBox(pos);
+          for (let obj of collidableObjects) {
+            if (obj.userData.isSolid) {
+              if (
+                playerBox.intersectsBox(new THREE.Box3().setFromObject(obj))
+              ) {
+                pos.copy(oldPos);
+                break;
+              }
+            }
+          }
+          oldPos.copy(pos);
+
+          // Move Z
+          controls.moveForward(-velocity.z * delta);
+          playerBox = getPlayerBox(pos);
+          for (let obj of collidableObjects) {
+            if (obj.userData.isSolid) {
+              if (
+                playerBox.intersectsBox(new THREE.Box3().setFromObject(obj))
+              ) {
+                pos.copy(oldPos);
+                break;
+              }
+            }
+          }
+
+          // Move Y
+          pos.y += velocity.y * delta;
+          const standHeight = isCrouching ? 0.75 : 1.5;
+          let currentFloorHeight = 0;
+
+          const downRay = new THREE.Raycaster(pos, new THREE.Vector3(0, -1, 0));
+
+          // [UPDATED] Added 'true' to recursively check inside GLTF groups
+          const groundHits = downRay.intersectObjects(collidableObjects, true);
+
+          for (let i = 0; i < groundHits.length; i++) {
+            let hitObj = groundHits[i].object;
+            let isSolid = false;
+
+            // [NEW] Climb up the family tree. If we hit a computer key,
+            // check if the keyboard model itself is solid.
+            while (hitObj) {
+              if (hitObj.userData.isSolid) {
+                isSolid = true;
+                break;
+              }
+              hitObj = hitObj.parent;
+            }
+
+            if (isSolid) {
+              currentFloorHeight = groundHits[i].point.y;
+              break;
+            }
+          }
+
+          const targetHeight = currentFloorHeight + standHeight;
+
+          if (pos.y < targetHeight) {
+            velocity.y = 0;
+            pos.y = targetHeight;
+            canJump = true;
+          }
+
+          const liveX = pos.x.toFixed(2);
+          const liveY = pos.y.toFixed(2);
+          const liveZ = pos.z.toFixed(2);
+          const liveYaw = camera.rotation.y.toFixed(2);
+          const livePitch = camera.rotation.x.toFixed(2);
+          coordDisplay.innerHTML = `X: ${liveX} | Y: ${liveY} | Z: ${liveZ}<br>Yaw: ${liveYaw} | Pitch: ${livePitch}`;
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      window.onload = function () {
+        animate();
+      };
+    </script>
+  </body>
+</html>

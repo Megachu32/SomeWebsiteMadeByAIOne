@@ -1,0 +1,11 @@
+Model Information:
+* title:	Pc low poly
+* source:	https://sketchfab.com/3d-models/pc-low-poly-fe6b3b45c74d44aaacb569cbc368483e
+* author:	@Aninha (https://sketchfab.com/Ani_nhha)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Pc low poly" (https://sketchfab.com/3d-models/pc-low-poly-fe6b3b45c74d44aaacb569cbc368483e) by @Aninha (https://sketchfab.com/Ani_nhha) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

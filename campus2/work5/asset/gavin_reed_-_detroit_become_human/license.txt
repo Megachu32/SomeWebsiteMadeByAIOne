@@ -1,0 +1,11 @@
+Model Information:
+* title:	Gavin Reed - Detroit Become Human
+* source:	https://sketchfab.com/3d-models/gavin-reed-detroit-become-human-0161bd8ecbaa44cb9da40ba4f2f80aaf
+* author:	qsardor (https://sketchfab.com/qsardor57913)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Gavin Reed - Detroit Become Human" (https://sketchfab.com/3d-models/gavin-reed-detroit-become-human-0161bd8ecbaa44cb9da40ba4f2f80aaf) by qsardor (https://sketchfab.com/qsardor57913) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
