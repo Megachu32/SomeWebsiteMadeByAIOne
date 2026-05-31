@@ -319,21 +319,20 @@
       // ==============================================================================
       // 4. LIGHTING & ENVIRONMENT
       // ==============================================================================
-      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      // Slightly dimmed ambient light so the indoor lamps stand out more
+      scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-      // Move the sun slightly higher and further back so it casts better shadows
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
       directionalLight.position.set(20, 40, 20);
       directionalLight.castShadow = true;
       directionalLight.shadow.mapSize.width = 2048;
       directionalLight.shadow.mapSize.height = 2048;
 
-      // [NEW] Expand the hidden shadow camera bounds to cover the massive building
       directionalLight.shadow.camera.left = -50;
       directionalLight.shadow.camera.right = 50;
       directionalLight.shadow.camera.top = 50;
       directionalLight.shadow.camera.bottom = -50;
-      directionalLight.shadow.camera.far = 150; // How far the shadows can reach
+      directionalLight.shadow.camera.far = 150; 
 
       scene.add(directionalLight);
 
@@ -344,6 +343,33 @@
       floor.position.y = 0;
       floor.receiveShadow = true;
       scene.add(floor);
+
+      // ==============================================================================
+      // [NEW] 3x3 INDOOR CEILING LIGHTS (Based on 5x5 Grid)
+      // ==============================================================================
+      
+      const xCoords = [-8, 0, 8];
+      const zCoords = [22, 30, 38];
+      
+      // MeshBasicMaterial is unaffected by shadow/light, so it always looks glowing white!
+      const lampMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const lampGeometry = new THREE.BoxGeometry(2, 0.1, 0.5); // Rectangular fluorescent tube
+
+      for (let x of xCoords) {
+          for (let z of zCoords) {
+              // 1. The Actual Light Source (color, intensity, distance, decay)
+              const indoorLight = new THREE.PointLight(0xffffee, 0.6, 25, 2);
+              indoorLight.position.set(x, 9.5, z); // Hangs slightly below the ceiling
+              
+              // indoorLight.castShadow = true; // UNCOMMENT AT YOUR OWN RISK! Kills FPS.
+              scene.add(indoorLight);
+
+              // 2. The Physical Lamp Fixture
+              const lampFixture = new THREE.Mesh(lampGeometry, lampMaterial);
+              lampFixture.position.set(x, 9.9, z); // Glued directly to the ceiling (Y=10)
+              scene.add(lampFixture);
+          }
+      }
 
       // ==============================================================================
       // 5. THE BUILDING
