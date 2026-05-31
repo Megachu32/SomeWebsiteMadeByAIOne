@@ -1,0 +1,11 @@
+Model Information:
+* title:	SmartTv  / Televisión / Monitor Pc
+* source:	https://sketchfab.com/3d-models/smarttv-television-monitor-pc-31cf09fde33a49e98a2468f19bb382ad
+* author:	Stgo Design (https://sketchfab.com/stgodesign)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "SmartTv  / Televisión / Monitor Pc" (https://sketchfab.com/3d-models/smarttv-television-monitor-pc-31cf09fde33a49e98a2468f19bb382ad) by Stgo Design (https://sketchfab.com/stgodesign) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
