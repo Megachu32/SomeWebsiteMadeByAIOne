@@ -139,6 +139,7 @@
         1000,
       );
       camera.position.y = 1.5;
+      scene.add(camera);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -188,58 +189,162 @@
 
       let scpTarget = null; // Variable to hold the SCP model
 
+      // 1. Prevent the browser's right-click menu from popping up
+      document.addEventListener("contextmenu", (event) =>
+        event.preventDefault(),
+      );
+
+      // 2. Main Click Logic
       document.addEventListener("mousedown", (event) => {
-        if (event.button === 0 && controls.isLocked === true) {
-          raycaster.setFromCamera(centerPosition, camera);
-          const intersects = raycaster.intersectObjects(interactableObjects);
+        if (controls.isLocked === true) {
+          // [NEW] RIGHT CLICK (Start Rotating)
+          if (event.button === 2 && heldObject) {
+            isRotatingItem = true;
+            return;
+          }
 
-          if (intersects.length > 0) {
-            const hitObject = intersects[0].object;
-
-            if (hitObject.userData.isDoorHitbox) {
-              hitObject.material.opacity = 0.3;
-              setTimeout(() => {
-                hitObject.material.opacity = 0;
-              }, 150);
-
-              const doorObj = hitObject.userData.doorReference;
-              if (doorObj) {
-                doorObj.userData.isClosed = !doorObj.userData.isClosed;
-                if (doorObj.userData.isClosed) {
-                  doorObj.visible = true;
-                  doorObj.userData.isSolid = true;
-                } else {
-                  doorObj.visible = false;
-                  doorObj.userData.isSolid = false;
+          // LEFT CLICK
+          if (event.button === 0) {
+            // ==========================================
+            // IF HOLDING AN ITEM -> DROP IT
+            // ==========================================
+            if (heldObject) {
+              // Restore solid materials and force a visual update
+              heldObject.traverse((node) => {
+                if (node.isMesh && node.material) {
+                  node.material.transparent = node.userData.originalTransparent;
+                  node.material.opacity = node.userData.originalOpacity;
+                  node.material.needsUpdate = true; // [NEW] Fixes the un-ghosting!
                 }
-              }
+              });
+
+              if (heldObject.userData.isSolid)
+                collidableObjects.push(heldObject);
+
+              heldObject = null;
+              isRotatingItem = false;
+              console.log("Item Placed!");
+              return;
             }
-            // [NEW] Air Conditioner Click Logic
-            else if (hitObject.userData.parentAC) {
-              const ac = hitObject.userData.parentAC;
-              ac.userData.isOn = !ac.userData.isOn; // Toggle on/off state
-              // console.log(ac.userData.isOn);
 
-              if (ac.userData.animAction) {
-                if (ac.userData.isOn) {
-                  ac.userData.animAction.play(); // Start animation (like a spinning fan)
-                  console.log("AC Turned ON");
-                } else {
-                  ac.userData.animAction.stop(); // Stop animation
-                  console.log("AC Turned OFF");
+            // ==========================================
+            // IF EMPTY HANDED -> TRY TO INTERACT
+            // ==========================================
+            raycaster.setFromCamera(centerPosition, camera);
+            const intersects = raycaster.intersectObjects(interactableObjects);
+
+            if (intersects.length > 0) {
+              const hitObject = intersects[0].object;
+
+              // --- A. DOOR LOGIC ---
+              if (hitObject.userData.isDoorHitbox) {
+                hitObject.material.opacity = 0.3;
+                setTimeout(() => {
+                  hitObject.material.opacity = 0;
+                }, 150);
+
+                const doorObj = hitObject.userData.doorReference;
+                if (doorObj) {
+                  doorObj.userData.isClosed = !doorObj.userData.isClosed;
+                  if (doorObj.userData.isClosed) {
+                    doorObj.visible = true;
+                    doorObj.userData.isSolid = true;
+                  } else {
+                    doorObj.visible = false;
+                    doorObj.userData.isSolid = false;
+                  }
                 }
               }
 
-              // Flash a cool icy-blue color for feedback instead of red
-              if (hitObject.material && hitObject.material.color) {
+              // --- B. AIR CONDITIONER LOGIC ---
+              else if (hitObject.userData.parentAC) {
+                const ac = hitObject.userData.parentAC;
+                ac.userData.isOn = !ac.userData.isOn;
+
+                if (ac.userData.animAction) {
+                  if (ac.userData.isOn) {
+                    ac.userData.animAction.play();
+                  } else {
+                    ac.userData.animAction.stop();
+                  }
+                }
+
+                if (hitObject.material && hitObject.material.color) {
+                  const originalColor = hitObject.material.color.getHex();
+                  hitObject.material.color.setHex(0x00ffff);
+                  setTimeout(() => {
+                    hitObject.material.color.setHex(originalColor);
+                  }, 150);
+                }
+              }
+
+              // --- C. INVENTORY PICKUP LOGIC ---
+              else if (
+                hitObject.userData.parentWrapper &&
+                movableModelNames.includes(
+                  hitObject.userData.parentWrapper.userData.modelName,
+                )
+              ) {
+                const wrapper = hitObject.userData.parentWrapper;
+                heldObject = wrapper;
+                previewRotationY = wrapper.rotation.y;
+
+                // 1. Remove from collisions
+                const colIndex = collidableObjects.indexOf(wrapper);
+                if (colIndex > -1) collidableObjects.splice(colIndex, 1);
+
+                // 2. Apply Ghost Effect and force graphic update
+                wrapper.traverse((node) => {
+                  if (node.isMesh && node.material) {
+                    node.userData.originalTransparent =
+                      node.material.transparent || false;
+                    node.userData.originalOpacity =
+                      node.material.opacity !== undefined
+                        ? node.material.opacity
+                        : 1;
+
+                    node.material.transparent = true;
+                    node.material.opacity = 0.5;
+                    node.material.needsUpdate = true; // [NEW] Applies transparency instantly
+                  }
+                });
+
+                console.log("Picked up: " + wrapper.userData.modelName);
+              }
+
+              // --- D. DEFAULT CLICK FEEDBACK ---
+              else if (hitObject.material && hitObject.material.color) {
                 const originalColor = hitObject.material.color.getHex();
-                hitObject.material.color.setHex(0x00ffff);
+                hitObject.material.color.setHex(0xff0000);
                 setTimeout(() => {
                   hitObject.material.color.setHex(originalColor);
                 }, 150);
               }
             }
           }
+        }
+      });
+
+      // 3. RIGHT CLICK RELEASE (Stop Rotating)
+      document.addEventListener("mouseup", (event) => {
+        if (event.button === 2) {
+          isRotatingItem = false;
+        }
+      });
+
+      // 4. DRAG TO ROTATE LOGIC
+      document.addEventListener("mousemove", (event) => {
+        if (controls.isLocked && heldObject && isRotatingItem) {
+          // Spin based on how fast the mouse moves horizontally
+          previewRotationY += event.movementX * 0.01;
+        }
+      });
+
+      // [NEW] MOUSE WHEEL ROTATION
+      document.addEventListener("wheel", (event) => {
+        if (controls.isLocked && heldObject) {
+          // Scroll up or down to rotate by roughly 15 degrees (0.26 radians)
+          previewRotationY += event.deltaY < 0 ? 0.26 : -0.26;
         }
       });
 
@@ -256,6 +361,21 @@
       const velocity = new THREE.Vector3();
       const direction = new THREE.Vector3();
       const clock = new THREE.Clock();
+
+      // [NEW] Inventory & Sandbox Variables
+      const movableModelNames = [
+        "office_chair",
+        "lowpoly_pizza_box",
+        "basic_keyboard",
+        "computer_mouse_low-poly",
+        "playstation_5_digital_lowpoly",
+        "low_poly_controller",
+      ];
+
+      let heldObject = null; // The actual model hidden in your inventory
+      let placementPreview = null; // The glowing green hologram
+      let previewRotationY = 0; // The current rotation angle
+      let isRotatingItem = false; // [NEW] Tracks if right-click is held down
 
       const onKeyDown = function (event) {
         switch (event.code) {
@@ -364,7 +484,10 @@
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = 0;
       floor.receiveShadow = true;
+
+      floor.userData.isSolid = true; // [NEW] Tell the engine it's solid
       scene.add(floor);
+      collidableObjects.push(floor); // [NEW] Add it to the Raycaster hit-list!
 
       // ==============================================================================
       // [NEW] 3x3 INDOOR CEILING LIGHTS (Based on 5x5 Grid)
@@ -611,10 +734,23 @@
             wrapper.userData.isSolid = isSolid;
             if (isSolid) collidableObjects.push(wrapper);
 
+            wrapper.userData.modelName = folderName; // Save the folder name
+
+            // [UPDATED] Standard logic for everything else
             wrapper.traverse(function (node) {
               if (node.isMesh) {
                 node.castShadow = true;
                 node.receiveShadow = true;
+
+                // Tag every mesh with its parent wrapper so the Raycaster can find it
+                node.userData.parentWrapper = wrapper;
+
+                // Add to interactable objects so we can click it!
+                // (Make sure not to double-add TV/AC parts if you already did above)
+                if (!node.userData.parentTV && !node.userData.parentAC) {
+                  interactableObjects.push(node);
+                }
+
                 if (node.material) {
                   node.material.metalness = 0.2;
                   node.material.roughness = 0.8;
@@ -650,7 +786,7 @@
               folderName === "north_-_detroit_become_human"
             ) {
               wrapper.userData.isNPC = true;
-              // wrapper.userData.patrolTimer = 0; // Keeps track of  how long he walks
+              wrapper.userData.patrolTimer = 0; // Keeps track of  how long he walks
               animatedNPCs.push(wrapper);
             }
             // ==========================================================
@@ -902,6 +1038,31 @@
                 scpTarget.userData.velocityY = 0; // Reset velocity
               }
             }
+
+            // ==========================================================
+            // [NEW] PHYSICS GUN PLACEMENT TRACKING
+            // ==========================================================
+            if (heldObject) {
+              raycaster.setFromCamera(centerPosition, camera);
+              const intersects = raycaster.intersectObjects(
+                collidableObjects,
+                true,
+              );
+
+              if (intersects.length > 0) {
+                // 1. It hit the floor or a table! Snap perfectly to it.
+                heldObject.position.copy(intersects[0].point);
+              } else {
+                // 2. Looking at the sky! Float it 3 meters in front of the camera.
+                const lookAtVector = new THREE.Vector3(0, 0, -3);
+                lookAtVector.applyMatrix4(camera.matrixWorld);
+                heldObject.position.copy(lookAtVector);
+              }
+
+              // Apply mouse-wheel rotation
+              heldObject.rotation.y = previewRotationY;
+            }
+            // ==========================================================
 
             // 3. Apply gravity if the SCP is currently being looked at
             if (
