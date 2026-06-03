@@ -186,6 +186,7 @@
 
       const mixers = [];
       const animatedNPCs = [];
+      const oscillatingFans = [];
 
       let scpTarget = null; // Variable to hold the SCP model
 
@@ -195,9 +196,10 @@
       );
 
       // 2. Main Click Logic
+      // 2. Main Click Logic
       document.addEventListener("mousedown", (event) => {
         if (controls.isLocked === true) {
-          // [NEW] RIGHT CLICK (Start Rotating)
+          // RIGHT CLICK (Start Rotating)
           if (event.button === 2 && heldObject) {
             isRotatingItem = true;
             return;
@@ -206,18 +208,10 @@
           // LEFT CLICK
           if (event.button === 0) {
             // ==========================================
-            // IF HOLDING AN ITEM -> DROP IT
+            // 1. IF HOLDING AN ITEM -> DROP IT
             // ==========================================
             if (heldObject) {
-              // Restore solid materials and force a visual update
-              heldObject.traverse((node) => {
-                if (node.isMesh && node.material) {
-                  node.material.transparent = node.userData.originalTransparent;
-                  node.material.opacity = node.userData.originalOpacity;
-                  node.material.needsUpdate = true; // [NEW] Fixes the un-ghosting!
-                }
-              });
-
+              // Simply restore physical collision so you can walk on it / place things on it
               if (heldObject.userData.isSolid)
                 collidableObjects.push(heldObject);
 
@@ -228,7 +222,7 @@
             }
 
             // ==========================================
-            // IF EMPTY HANDED -> TRY TO INTERACT
+            // 2. IF EMPTY HANDED -> TRY TO INTERACT
             // ==========================================
             raycaster.setFromCamera(centerPosition, camera);
             const intersects = raycaster.intersectObjects(interactableObjects);
@@ -289,27 +283,18 @@
                 heldObject = wrapper;
                 previewRotationY = wrapper.rotation.y;
 
-                // 1. Remove from collisions
+                // 1. Remove from collisions so it doesn't block the placement laser
                 const colIndex = collidableObjects.indexOf(wrapper);
                 if (colIndex > -1) collidableObjects.splice(colIndex, 1);
 
-                // 2. Apply Ghost Effect and force graphic update
-                wrapper.traverse((node) => {
-                  if (node.isMesh && node.material) {
-                    node.userData.originalTransparent =
-                      node.material.transparent || false;
-                    node.userData.originalOpacity =
-                      node.material.opacity !== undefined
-                        ? node.material.opacity
-                        : 1;
-
-                    node.material.transparent = true;
-                    node.material.opacity = 0.5;
-                    node.material.needsUpdate = true; // [NEW] Applies transparency instantly
-                  }
-                });
+                // (The ghosting/transparency logic has been completely removed here)
 
                 console.log("Picked up: " + wrapper.userData.modelName);
+              }
+              // --- E. FAN LOGIC ---
+              else if (hitObject.userData.parentFan) {
+                const fan = hitObject.userData.parentFan;
+                fan.userData.isOscillating = !fan.userData.isOscillating; // Toggle On/Off
               }
 
               // --- D. DEFAULT CLICK FEEDBACK ---
@@ -532,6 +517,25 @@
         metalness: 0.1,
       });
 
+      const customBoxGeo = new THREE.BoxGeometry(0.2, 0.75, 0.2);
+      const customBoxMat = new THREE.MeshStandardMaterial({
+        color: 0xaaaaaa, // Simple grey, feel free to change!
+        roughness: 0.8,
+        metalness: 0.1,
+      });
+      const customBox = new THREE.Mesh(customBoxGeo, customBoxMat);
+
+      // Snapped exactly to your screenshot coordinates
+      customBox.position.set(14.9, 0.2, 18.9);
+      customBox.rotation.y = 0.82; // Spun to match your camera Yaw
+
+      customBox.castShadow = true;
+      customBox.receiveShadow = true;
+      customBox.userData.isSolid = true; // Makes sure you can bump into it
+
+      scene.add(customBox);
+      collidableObjects.push(customBox);
+
       // --- FRACTION CALCULATIONS FOR FRONT WALL ---
       // Total wall is 40m wide and 10m high.
 
@@ -647,7 +651,6 @@
       // ==============================================================================
       const gltfLoader = new THREE.GLTFLoader();
 
-      // Load Custom Sliding Door (We keep this separate because it has custom Hitbox logic)
       gltfLoader.load("asset/sliding_door/scene.gltf", function (gltf) {
         const door = gltf.scene;
         door.scale.set(1, 1, 1);
@@ -670,7 +673,6 @@
         scene.add(door);
       });
 
-      // THE MASTER PRESET FUNCTION (Upgraded with Auto-Centering & Animations)
       function loadModel(
         folderName,
         scale,
@@ -681,7 +683,7 @@
         rotY,
         rotZ,
         isSolid,
-        autoCenter = false, // Set this to true for broken models
+        autoCenter = false,
       ) {
         gltfLoader.load(
           "asset/" + folderName + "/scene.gltf",
@@ -689,12 +691,10 @@
             const wrapper = new THREE.Group();
             const model = gltf.scene;
 
-            // Auto-Center Logic
             if (autoCenter) {
               const box = new THREE.Box3().setFromObject(model);
               const center = box.getCenter(new THREE.Vector3());
 
-              // Shift X and Z to the middle. Shift Y so the bottom touches 0.
               model.position.x = -center.x;
               model.position.y = -box.min.y;
               model.position.z = -center.z;
@@ -702,56 +702,88 @@
 
             wrapper.add(model);
 
-            // [NEW] Air Conditioner Setup
-            if (folderName === "air_conditioner") {
-              wrapper.userData.isAC = true;
-              wrapper.userData.isOn = false;
-
-              // If the model has animations, get them ready but DON'T play them yet
-              if (gltf.animations && gltf.animations.length > 0) {
-                const mixer = new THREE.AnimationMixer(model);
-                const action = mixer.clipAction(gltf.animations[0]);
-
-                wrapper.userData.animAction = action; // Save it to trigger on click
-                mixers.push(mixer);
-                console.log(`🎬 AC Animation loaded:`, gltf.animations[0].name);
-              }
-
-              // Bind the physical meshes to the wrapper so we can click them
-              wrapper.traverse(function (node) {
-                if (node.isMesh) {
-                  node.userData.parentAC = wrapper;
-                  interactableObjects.push(node);
-                }
-              });
-            }
-
-            // Apply all positioning and scaling to the wrapper instead
             wrapper.scale.set(scale, scale, scale);
             wrapper.position.set(posX, posY, posZ);
             wrapper.rotation.set(rotX, rotY, rotZ);
 
             wrapper.userData.isSolid = isSolid;
+            wrapper.userData.modelName = folderName;
+
             if (isSolid) collidableObjects.push(wrapper);
 
-            wrapper.userData.modelName = folderName; // Save the folder name
+            // Setup simple AI for Connor AND North
+            if (
+              folderName === "connor_rk900_-_detroit_become_human" ||
+              folderName === "north_-_detroit_become_human"
+            ) {
+              wrapper.userData.isNPC = true;
+              wrapper.userData.patrolTimer = 0;
+              animatedNPCs.push(wrapper);
+            }
 
-            // [UPDATED] Standard logic for everything else
+            // Setup Air Conditioner
+            if (folderName === "air_conditioner") {
+              wrapper.userData.isAC = true;
+              wrapper.userData.isOn = false;
+
+              if (gltf.animations && gltf.animations.length > 0) {
+                const mixer = new THREE.AnimationMixer(model);
+                const action = mixer.clipAction(gltf.animations[0]);
+
+                wrapper.userData.animAction = action;
+                mixers.push(mixer);
+              }
+            }
+
+            // Setup Low Poly Fan
+            if (folderName === "fan_lowpoly") {
+              wrapper.userData.isFan = true;
+              wrapper.userData.isOscillating = false;
+              wrapper.userData.oscillationTimer = 0;
+              wrapper.userData.fanHead = null;
+
+              console.log("--- FAN MESHES LOADED ---");
+
+              wrapper.traverse(function (node) {
+                if (node.isMesh) {
+                  console.log("Fan Part: " + node.name);
+
+                  // CHANGE THIS STRING to match whatever your fan's head/motor is named!
+                  if (node.name.includes("HeadMeshNameHere")) {
+                    wrapper.userData.fanHead = node;
+                    wrapper.userData.baseRotationY = node.rotation.y;
+                  }
+
+                  node.userData.parentFan = wrapper;
+                }
+              });
+
+              oscillatingFans.push(wrapper);
+            }
+
             wrapper.traverse(function (node) {
               if (node.isMesh) {
                 node.castShadow = true;
                 node.receiveShadow = true;
 
-                // Tag every mesh with its parent wrapper so the Raycaster can find it
                 node.userData.parentWrapper = wrapper;
 
-                // Add to interactable objects so we can click it!
-                // (Make sure not to double-add TV/AC parts if you already did above)
-                if (!node.userData.parentTV && !node.userData.parentAC) {
+                if (
+                  !node.userData.parentTV &&
+                  !node.userData.parentAC &&
+                  !node.userData.parentFan
+                ) {
+                  interactableObjects.push(node);
+                } else if (node.userData.parentAC) {
+                  node.userData.parentAC = wrapper;
+                  interactableObjects.push(node);
+                } else if (node.userData.parentFan) {
+                  node.userData.parentFan = wrapper;
                   interactableObjects.push(node);
                 }
 
                 if (node.material) {
+                  node.material = node.material.clone();
                   node.material.metalness = 0.2;
                   node.material.roughness = 0.8;
                 }
@@ -762,36 +794,17 @@
               `✅ Loaded [${folderName}] at ${posX}, ${posY}, ${posZ}`,
             );
 
-            // ==========================================================
-            // [NEW] ANIMATION MIXER LOGIC
-            // ==========================================================
-            if (gltf.animations && gltf.animations.length > 0) {
+            if (
+              gltf.animations &&
+              gltf.animations.length > 0 &&
+              folderName !== "air_conditioner"
+            ) {
               const mixer = new THREE.AnimationMixer(model);
-
-              // Play the first animation by default (usually index 0 is Walk or Idle)
               const action = mixer.clipAction(gltf.animations[0]);
               action.play();
               mixers.push(mixer);
-
-              // Log the animation names so you can change the index if needed!
-              console.log(
-                `🎬 Animations for ${folderName}:`,
-                gltf.animations.map((a) => a.name),
-              );
             }
 
-            // Setup simple AI for Connor
-            if (
-              folderName === "connor_rk900_-_detroit_become_human" ||
-              folderName === "north_-_detroit_become_human"
-            ) {
-              wrapper.userData.isNPC = true;
-              wrapper.userData.patrolTimer = 0; // Keeps track of  how long he walks
-              animatedNPCs.push(wrapper);
-            }
-            // ==========================================================
-
-            // SCP-173 Logic
             if (folderName === "scp-173") {
               scpTarget = wrapper;
               scpTarget.userData.hasBeenLookedAt = false;
@@ -808,7 +821,6 @@
       }
 
       // --- MAP EDITOR: ADD YOUR PRESETS HERE ---
-      //   folderName,scale,posX,posY,posZ,rotX,rotY,rotZ,isSolid,
       loadModel(
         "cash_register",
         0.5,
@@ -919,55 +931,45 @@
         true,
         false,
       );
-      loadModel("lowpoly_pizza_box", 0.5, -14.26, 0.1, 18.05, 0, 0.64, 0, true);
       loadModel(
-        "connor_rk900_-_detroit_become_human",
-        1,
-        -5.48,
+        "lowpoly_pizza_box",
+        0.5,
+        -14.26,
         0.1,
-        18.26,
+        18.05,
         0,
-        -0.0,
-        0,
-        true,
-        true,
-      );
-      loadModel(
-        "coctail_lowpoly",
-        0.001,
-        -5.88,
-        1.0,
-        19.87,
-        0,
-        -0.0,
+        0.64,
         0,
         true,
         false,
       );
       loadModel(
-        "laptop_asus_rog_zephyrus_g15_-_made_with_blender",
-        2.5,
-        -11.96,
+        "connor_rk900_-_detroit_become_human",
+        1,
+        3.19,
         0.1,
-        14.65,
+        26.76,
         0,
-        0.65,
+        -0.0,
         0,
         true,
+        true,
       );
-      loadModel("pc_low_poly", 2.5, 12.78, 0.1, 14.36, 0, 1.7, 0, true);
       loadModel(
         "north_-_detroit_become_human",
-        0.5,
-        -5.54,
+        1,
+        6.0,
         0.1,
-        16.52,
+        26.0,
         0,
-        -0.01,
         0,
+        0,
+        true,
         true,
       );
 
+      // [NEW] The Low Poly Fan (Placed exactly at your screenshot coordinates)
+      loadModel("fan_lowpoly", 0.1, 14.9, 1.6, 18.9, 0, 3.14, 0, true, false);
       // -----------------------------------------
 
       // ==============================================================================
@@ -981,6 +983,22 @@
         // [NEW] 1. Update all animations
         for (let i = 0; i < mixers.length; i++) {
           mixers[i].update(delta);
+        }
+
+        // [NEW] FAN OSCILLATION LOOP
+        for (let i = 0; i < oscillatingFans.length; i++) {
+          let fan = oscillatingFans[i];
+
+          if (fan.userData.isOscillating && fan.userData.fanHead) {
+            fan.userData.oscillationTimer += delta;
+
+            // Math.sin creates a smooth wave. Placed here, it swings 90 degrees left and right.
+            const swingAngle =
+              Math.sin(fan.userData.oscillationTimer * 1.5) * (Math.PI / 2);
+
+            fan.userData.fanHead.rotation.y =
+              fan.userData.baseRotationY + swingAngle;
+          }
         }
 
         // [NEW] 2. Simple Patrol AI
