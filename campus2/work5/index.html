@@ -183,6 +183,9 @@
       const interactableObjects = [];
       const collidableObjects = [];
 
+      const mixers = [];
+      const animatedNPCs = [];
+
       let scpTarget = null; // Variable to hold the SCP model
 
       document.addEventListener("mousedown", (event) => {
@@ -210,12 +213,31 @@
                   doorObj.userData.isSolid = false;
                 }
               }
-            } else if (hitObject.material && hitObject.material.color) {
-              const originalColor = hitObject.material.color.getHex();
-              hitObject.material.color.setHex(0xff0000);
-              setTimeout(() => {
-                hitObject.material.color.setHex(originalColor);
-              }, 150);
+            }
+            // [NEW] Air Conditioner Click Logic
+            else if (hitObject.userData.parentAC) {
+              const ac = hitObject.userData.parentAC;
+              ac.userData.isOn = !ac.userData.isOn; // Toggle on/off state
+              // console.log(ac.userData.isOn);
+
+              if (ac.userData.animAction) {
+                if (ac.userData.isOn) {
+                  ac.userData.animAction.play(); // Start animation (like a spinning fan)
+                  console.log("AC Turned ON");
+                } else {
+                  ac.userData.animAction.stop(); // Stop animation
+                  console.log("AC Turned OFF");
+                }
+              }
+
+              // Flash a cool icy-blue color for feedback instead of red
+              if (hitObject.material && hitObject.material.color) {
+                const originalColor = hitObject.material.color.getHex();
+                hitObject.material.color.setHex(0x00ffff);
+                setTimeout(() => {
+                  hitObject.material.color.setHex(originalColor);
+                }, 150);
+              }
             }
           }
         }
@@ -525,7 +547,7 @@
         scene.add(door);
       });
 
-      // THE MASTER PRESET FUNCTION (Upgraded with Auto-Centering)
+      // THE MASTER PRESET FUNCTION (Upgraded with Auto-Centering & Animations)
       function loadModel(
         folderName,
         scale,
@@ -536,7 +558,7 @@
         rotY,
         rotZ,
         isSolid,
-        autoCenter = false, // [NEW] Set this to true for broken models
+        autoCenter = false, // Set this to true for broken models
       ) {
         gltfLoader.load(
           "asset/" + folderName + "/scene.gltf",
@@ -544,7 +566,7 @@
             const wrapper = new THREE.Group();
             const model = gltf.scene;
 
-            // [NEW] Auto-Center Logic
+            // Auto-Center Logic
             if (autoCenter) {
               const box = new THREE.Box3().setFromObject(model);
               const center = box.getCenter(new THREE.Vector3());
@@ -556,6 +578,30 @@
             }
 
             wrapper.add(model);
+
+            // [NEW] Air Conditioner Setup
+            if (folderName === "air_conditioner") {
+              wrapper.userData.isAC = true;
+              wrapper.userData.isOn = false;
+
+              // If the model has animations, get them ready but DON'T play them yet
+              if (gltf.animations && gltf.animations.length > 0) {
+                const mixer = new THREE.AnimationMixer(model);
+                const action = mixer.clipAction(gltf.animations[0]);
+
+                wrapper.userData.animAction = action; // Save it to trigger on click
+                mixers.push(mixer);
+                console.log(`🎬 AC Animation loaded:`, gltf.animations[0].name);
+              }
+
+              // Bind the physical meshes to the wrapper so we can click them
+              wrapper.traverse(function (node) {
+                if (node.isMesh) {
+                  node.userData.parentAC = wrapper;
+                  interactableObjects.push(node);
+                }
+              });
+            }
 
             // Apply all positioning and scaling to the wrapper instead
             wrapper.scale.set(scale, scale, scale);
@@ -580,8 +626,35 @@
               `✅ Loaded [${folderName}] at ${posX}, ${posY}, ${posZ}`,
             );
 
+            // ==========================================================
+            // [NEW] ANIMATION MIXER LOGIC
+            // ==========================================================
+            if (gltf.animations && gltf.animations.length > 0) {
+              const mixer = new THREE.AnimationMixer(model);
+
+              // Play the first animation by default (usually index 0 is Walk or Idle)
+              const action = mixer.clipAction(gltf.animations[0]);
+              action.play();
+              mixers.push(mixer);
+
+              // Log the animation names so you can change the index if needed!
+              console.log(
+                `🎬 Animations for ${folderName}:`,
+                gltf.animations.map((a) => a.name),
+              );
+            }
+
+            // Setup simple AI for Connor
+            if (folderName === "connor_rk900_-_detroit_become_human") {
+              wrapper.userData.isNPC = true;
+              // wrapper.userData.patrolTimer = 0; // Keeps track of how long he walks
+              animatedNPCs.push(wrapper);
+            }
+            // ==========================================================
+
+            // SCP-173 Logic
             if (folderName === "scp-173") {
-              scpTarget = wrapper; // Bind to wrapper now
+              scpTarget = wrapper;
               scpTarget.userData.hasBeenLookedAt = false;
               scpTarget.userData.isCurrentlyLookedAt = false;
               scpTarget.userData.isFloating = false;
@@ -711,9 +784,9 @@
       loadModel(
         "connor_rk900_-_detroit_become_human",
         1,
-        3.19,
+        -5.48,
         0.1,
-        26.76,
+        18.26,
         0,
         -0.0,
         0,
@@ -730,6 +803,26 @@
         requestAnimationFrame(animate);
 
         const delta = clock.getDelta();
+
+        // [NEW] 1. Update all animations
+        for (let i = 0; i < mixers.length; i++) {
+          mixers[i].update(delta);
+        }
+
+        // [NEW] 2. Simple Patrol AI
+        for (let i = 0; i < animatedNPCs.length; i++) {
+          let npc = animatedNPCs[i];
+
+          // Move the NPC forward at a speed of 1.5 meters per second
+          // npc.translateZ(1.5 * delta);
+
+          // Timer: Make him turn around every 5 seconds
+          // npc.userData.patrolTimer += delta;
+          // if (npc.userData.patrolTimer > 5.0) {
+          //   npc.rotation.y += Math.PI; // Spin exactly 180 degrees (3.14 radians)
+          //   npc.userData.patrolTimer = 0; // Reset the timer
+          // }
+        }
 
         if (controls.isLocked === true) {
           // ==========================================================================
