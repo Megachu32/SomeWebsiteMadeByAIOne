@@ -645,7 +645,10 @@
             }
 
             // Setup simple AI for Connor
-            if (folderName === "connor_rk900_-_detroit_become_human") {
+            if (
+              folderName === "connor_rk900_-_detroit_become_human" ||
+              folderName === "north_-_detroit_become_human"
+            ) {
               wrapper.userData.isNPC = true;
               // wrapper.userData.patrolTimer = 0; // Keeps track of  how long he walks
               animatedNPCs.push(wrapper);
@@ -817,6 +820,17 @@
         true,
       );
       loadModel("pc_low_poly", 2.5, 12.78, 0.1, 14.36, 0, 1.7, 0, true);
+      loadModel(
+        "north_-_detroit_become_human",
+        0.5,
+        -5.54,
+        0.1,
+        16.52,
+        0,
+        -0.01,
+        0,
+        true,
+      );
 
       // -----------------------------------------
 
