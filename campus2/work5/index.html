@@ -292,9 +292,30 @@
                 console.log("Picked up: " + wrapper.userData.modelName);
               }
               // --- E. FAN LOGIC ---
+              // --- E. FAN LOGIC (3-Speed Toggle) ---
               else if (hitObject.userData.parentFan) {
                 const fan = hitObject.userData.parentFan;
-                fan.userData.isOscillating = !fan.userData.isOscillating; // Toggle On/Off
+
+                // Cycle through speeds: 0 -> 1 -> 2 -> 3 -> 0
+                fan.userData.fanSpeedLevel =
+                  (fan.userData.fanSpeedLevel + 1) % 4;
+                fan.userData.isOscillating = fan.userData.fanSpeedLevel > 0; // Turn on if above 0
+
+                // Flash a color to indicate the speed level: Off(Grey), Low(Green), Med(Yellow), High(Red)
+                const speedColors = [0x555555, 0x00ff00, 0xffff00, 0xff0000];
+
+                if (hitObject.material && hitObject.material.color) {
+                  const originalColor = hitObject.material.color.getHex();
+                  hitObject.material.color.setHex(
+                    speedColors[fan.userData.fanSpeedLevel],
+                  );
+                  setTimeout(() => {
+                    hitObject.material.color.setHex(originalColor);
+                  }, 200);
+                }
+                console.log(
+                  "Fan Speed shifted to level: " + fan.userData.fanSpeedLevel,
+                );
               }
 
               // --- D. DEFAULT CLICK FEEDBACK ---
@@ -735,26 +756,25 @@
               }
             }
 
-            // Setup Low Poly Fan
+            // Setup Low Poly Fan (Whole Body Rotation & Multi-Speed)
             if (folderName === "fan_lowpoly") {
               wrapper.userData.isFan = true;
               wrapper.userData.isOscillating = false;
               wrapper.userData.oscillationTimer = 0;
-              wrapper.userData.fanHead = null;
 
-              console.log("--- FAN MESHES LOADED ---");
+              // [NEW] Multi-Speed Setup
+              wrapper.userData.fanSpeedLevel = 0; // 0 = Off, 1 = Low, 2 = Med, 3 = High
+              wrapper.userData.fanSpeeds = [0, 1.5, 3.5, 7.0]; // The actual math speed multipliers
+
+              // [OPTION A] Just spin the whole wrapper instead of finding a specific head
+              wrapper.userData.fanHead = wrapper;
+              wrapper.userData.baseRotationY = wrapper.rotation.y;
+
+              console.log("--- FAN LOADED ---");
 
               wrapper.traverse(function (node) {
                 if (node.isMesh) {
-                  console.log("Fan Part: " + node.name);
-
-                  // CHANGE THIS STRING to match whatever your fan's head/motor is named!
-                  if (node.name.includes("HeadMeshNameHere")) {
-                    wrapper.userData.fanHead = node;
-                    wrapper.userData.baseRotationY = node.rotation.y;
-                  }
-
-                  node.userData.parentFan = wrapper;
+                  node.userData.parentFan = wrapper; // Make it clickable
                 }
               });
 
@@ -946,9 +966,9 @@
       loadModel(
         "connor_rk900_-_detroit_become_human",
         1,
-        3.19,
+        -5.44,
         0.1,
-        26.76,
+        17.76,
         0,
         -0.0,
         0,
@@ -957,10 +977,10 @@
       );
       loadModel(
         "north_-_detroit_become_human",
-        1,
-        6.0,
+        0.5,
+        -5.44,
         0.1,
-        26.0,
+        16.52,
         0,
         0,
         0,
@@ -969,7 +989,7 @@
       );
 
       // [NEW] The Low Poly Fan (Placed exactly at your screenshot coordinates)
-      loadModel("fan_lowpoly", 0.1, 14.9, 1.6, 18.9, 0, 3.14, 0, true, false);
+      loadModel("fan_lowpoly", 0.1, 14.9, 0.6, 18.9, 0, 3.14, 0, true, false);
       // -----------------------------------------
 
       // ==============================================================================
@@ -985,16 +1005,21 @@
           mixers[i].update(delta);
         }
 
-        // [NEW] FAN OSCILLATION LOOP
+        // [NEW] FAN OSCILLATION LOOP (Multi-Speed)
         for (let i = 0; i < oscillatingFans.length; i++) {
           let fan = oscillatingFans[i];
 
           if (fan.userData.isOscillating && fan.userData.fanHead) {
-            fan.userData.oscillationTimer += delta;
+            // Get the current speed from our array (1.5, 3.5, or 7.0)
+            let currentSpeed =
+              fan.userData.fanSpeeds[fan.userData.fanSpeedLevel];
 
-            // Math.sin creates a smooth wave. Placed here, it swings 90 degrees left and right.
+            // Push time forward multiplied by our speed
+            fan.userData.oscillationTimer += delta * currentSpeed;
+
+            // Math.sin swings between -1 and 1. Multiplied by PI/2 means a 90 degree swing each way.
             const swingAngle =
-              Math.sin(fan.userData.oscillationTimer * 1.5) * (Math.PI / 2);
+              Math.sin(fan.userData.oscillationTimer) * (Math.PI / 2);
 
             fan.userData.fanHead.rotation.y =
               fan.userData.baseRotationY + swingAngle;
