@@ -105,8 +105,9 @@
       </h1>
       <p style="font-size: 1.2em">
         <strong>WASD</strong> = Move | <strong>SPACE</strong> = Jump |
-        <strong>C</strong> = Crouch | <strong>Left Click</strong> = Interact |
-        <strong>P</strong> = Get Coordinates
+        <strong> F</strong> = Sprint | <strong>C</strong> = Crouch |
+        <strong>Left Click</strong> = Interact | <strong>P</strong> = Get
+        Coordinates
       </p>
     </div>
 
@@ -183,6 +184,8 @@
 
       const interactableObjects = [];
       const collidableObjects = [];
+      const slidingDoors = [];
+      const activeACs = [];
 
       const mixers = [];
       const animatedNPCs = [];
@@ -230,7 +233,9 @@
             if (intersects.length > 0) {
               const hitObject = intersects[0].object;
 
-              // --- A. DOOR LOGIC ---
+              console.log("🎯 YOU CLICKED EXACTLY ON: " + hitObject.name);
+
+              // --- A. DOOR LOGIC (Smooth Sliding) ---
               if (hitObject.userData.isDoorHitbox) {
                 hitObject.material.opacity = 0.3;
                 setTimeout(() => {
@@ -239,14 +244,13 @@
 
                 const doorObj = hitObject.userData.doorReference;
                 if (doorObj) {
+                  // Toggle state
                   doorObj.userData.isClosed = !doorObj.userData.isClosed;
-                  if (doorObj.userData.isClosed) {
-                    doorObj.visible = true;
-                    doorObj.userData.isSolid = true;
-                  } else {
-                    doorObj.visible = false;
-                    doorObj.userData.isSolid = false;
-                  }
+
+                  // Set the new target coordinate based on the state
+                  doorObj.userData.targetX = doorObj.userData.isClosed
+                    ? doorObj.userData.closedX
+                    : doorObj.userData.openX;
                 }
               }
 
@@ -363,6 +367,7 @@
         moveRight = false;
       let canJump = false;
       let isCrouching = false;
+      let isSprinting = false;
 
       const velocity = new THREE.Vector3();
       const direction = new THREE.Vector3();
@@ -405,6 +410,9 @@
             break;
           case "KeyC":
             isCrouching = true;
+            break;
+          case "KeyF": // [NEW] Sprint Toggle!
+            isSprinting = !isSprinting;
             break;
           case "KeyP":
             const pos = controls.getObject().position;
@@ -672,13 +680,28 @@
       // ==============================================================================
       const gltfLoader = new THREE.GLTFLoader();
 
+      // [NEW] Sliding Door Variables
+      const DOOR_SPEED = 2.5; // Speed in meters per second
+      const DOOR_CLOSED_X = 0; // Base location
+      const DOOR_OPEN_X = 2.0; // A little bit to the right
+
       gltfLoader.load("asset/sliding_door/scene.gltf", function (gltf) {
         const door = gltf.scene;
         door.scale.set(1, 1, 1);
-        door.position.set(0, 0, 10.5);
+        door.position.set(DOOR_CLOSED_X, 0, 10.5); // Start at closed position
 
-        door.userData = { isDoor: true, isSolid: true, isClosed: true };
+        door.userData = {
+          isDoor: true,
+          isSolid: true, // Always solid now, since it physically moves!
+          isClosed: true,
+          targetX: DOOR_CLOSED_X,
+          openX: DOOR_OPEN_X,
+          closedX: DOOR_CLOSED_X,
+          speed: DOOR_SPEED,
+        };
+
         collidableObjects.push(door);
+        slidingDoors.push(door); // Add to our animation loop list!
         doorHitbox.userData.doorReference = door;
 
         door.traverse(function (node) {
@@ -747,10 +770,25 @@
               wrapper.userData.isAC = true;
               wrapper.userData.isOn = false;
 
+              // [NEW] Flap Variables
+              wrapper.userData.acFlap = null;
+              wrapper.userData.baseRotationY = 0; // Third time's the charm: Y!
+
+              wrapper.traverse(function (node) {
+                if (node.isMesh) {
+                  if (node.name.includes("Plane002_White")) {
+                    wrapper.userData.acFlap = node;
+                    wrapper.userData.baseRotationY = node.rotation.y; // Grab the Y angle
+                  }
+                  node.userData.parentAC = wrapper;
+                }
+              });
+
+              activeACs.push(wrapper); // Add to our animation loop
+
               if (gltf.animations && gltf.animations.length > 0) {
                 const mixer = new THREE.AnimationMixer(model);
                 const action = mixer.clipAction(gltf.animations[0]);
-
                 wrapper.userData.animAction = action;
                 mixers.push(mixer);
               }
@@ -1026,6 +1064,40 @@
           }
         }
 
+        // [NEW] AC FLAP OSCILLATION LOOP
+        for (let i = 0; i < activeACs.length; i++) {
+          let ac = activeACs[i];
+
+          if (ac.userData.isOn && ac.userData.acFlap) {
+            const time = clock.getElapsedTime();
+            const swingAngle = Math.sin(time * 2.0) * (Math.PI / 6);
+
+            // Changed to rotate the Y axis!
+            ac.userData.acFlap.rotation.y =
+              ac.userData.baseRotationY + swingAngle;
+          }
+        }
+
+        // [NEW] SLIDING DOOR ANIMATION LOOP
+        for (let i = 0; i < slidingDoors.length; i++) {
+          let door = slidingDoors[i];
+          let target = door.userData.targetX;
+
+          // If the door is not at its target coordinate...
+          if (door.position.x !== target) {
+            let distance = target - door.position.x;
+            let step = door.userData.speed * delta; // How far to move this frame
+
+            // If the door is close enough, snap it exactly to the target so it doesn't jitter
+            if (Math.abs(distance) <= step) {
+              door.position.x = target;
+            } else {
+              // Otherwise, keep sliding in the correct direction (Math.sign returns +1 or -1)
+              door.position.x += Math.sign(distance) * step;
+            }
+          }
+        }
+
         // [NEW] 2. Simple Patrol AI
         for (let i = 0; i < animatedNPCs.length; i++) {
           let npc = animatedNPCs[i];
@@ -1095,6 +1167,7 @@
               if (intersects.length > 0) {
                 // 1. It hit the floor or a table! Snap perfectly to it.
                 heldObject.position.copy(intersects[0].point);
+                // console.log("🎯 YOU CLICKED EXACTLY ON: " + hitObject.name);
               } else {
                 // 2. Looking at the sky! Float it 3 meters in front of the camera.
                 const lookAtVector = new THREE.Vector3(0, 0, -3);
@@ -1132,7 +1205,14 @@
           direction.x = Number(moveRight) - Number(moveLeft);
           direction.normalize();
 
-          const currentSpeed = isCrouching ? 20.0 : 40.0;
+          let currentSpeed = 40.0; // Default walking speed
+
+          if (isCrouching) {
+            currentSpeed = 20.0; // Crouching overrides everything
+          } else if (isSprinting) {
+            currentSpeed = 80.0; // Double speed!
+          }
+
           if (moveForward || moveBackward)
             velocity.z -= direction.z * currentSpeed * delta;
           if (moveLeft || moveRight)
