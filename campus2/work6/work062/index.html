@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Matriks Kamera</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #282a36;
+            --text-color: #f8f8f2;
+            --accent: #bd93f9;
+            --border: #44475a;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        h1, h2, h3 { color: var(--accent); }
+        .panel {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            flex: 1;
+        }
+        .input-group { margin-bottom: 15px; }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #8be9fd;
+        }
+        .row { display: flex; gap: 10px; }
+        .row input { flex: 1; }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            background-color: #1e1e2e;
+            color: var(--text-color);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .matrix-container {
+            margin-bottom: 20px;
+            background-color: #1e1e2e;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            text-align: center;
+            font-family: monospace;
+            font-size: 1.1em;
+        }
+        td {
+            padding: 10px;
+            border: 1px dashed var(--border);
+            width: 25%;
+        }
+        .note { font-size: 0.85em; color: #6272a4; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>Konfigurasi Scene & Kamera</h2>
+        
+        <div class="input-group">
+            <label>Posisi Kamera (Eye X, Y, Z)</label>
+            <div class="row">
+                <input type="number" id="eyeX" value="10" step="0.1" oninput="updateMatrices()">
+                <input type="number" id="eyeY" value="5" step="0.1" oninput="updateMatrices()">
+                <input type="number" id="eyeZ" value="10" step="0.1" oninput="updateMatrices()">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Melihat Ke Posisi (Target X, Y, Z)</label>
+            <div class="row">
+                <input type="number" id="targetX" value="0" step="0.1" oninput="updateMatrices()">
+                <input type="number" id="targetY" value="2" step="0.1" oninput="updateMatrices()">
+                <input type="number" id="targetZ" value="0" step="0.1" oninput="updateMatrices()">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Kemiringan Up-Vector (Derajat/Roll)</label>
+            <input type="number" id="tilt" value="15" step="1" oninput="updateMatrices()">
+            <div class="note">0 = Tegak Lurus (Default Y-Up). Menggunakan perputaran terhadap sumbu pandang.</div>
+        </div>
+
+        <hr style="border-color: var(--border); margin: 20px 0;">
+
+        <div class="input-group">
+            <label>Sudut Pandang / FOV (Derajat vertikal)</label>
+            <input type="number" id="fov" value="60" step="1" min="1" max="179" oninput="updateMatrices()">
+        </div>
+
+        <div class="input-group">
+            <label>Aspek Rasio (Width / Height)</label>
+            <input type="number" id="aspect" value="2.35" step="0.01" min="0.1" oninput="updateMatrices()">
+            <div class="note">Contoh: 16:9 = 1.7777, 4:3 = 1.3333</div>
+        </div>
+
+        <div class="input-group">
+            <label>Near Clip & Far Clip</label>
+            <div class="row">
+                <input type="number" id="near" value="0.5" step="0.1" min="0.01" oninput="updateMatrices()">
+                <input type="number" id="far" value="1000" step="1" min="1" oninput="updateMatrices()">
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Hasil Matriks (4x4)</h2>
+        <div class="note" style="margin-top:-10px; margin-bottom: 20px;">Matriks direpresentasikan dalam format Row-Major untuk memudahkan pembacaan standar OpenGL/WebGL.</div>
+
+        <div class="matrix-container">
+            <h3>View Matrix (LookAt)</h3>
+            <table id="viewMatrix"></table>
+        </div>
+
+        <div class="matrix-container">
+            <h3>Projection Matrix (Perspective)</h3>
+            <table id="projMatrix"></table>
+        </div>
+
+        <div class="matrix-container">
+            <h3>View-Projection Matrix (Proj * View)</h3>
+            <table id="vpMatrix"></table>
+        </div>
+    </div>
+
+    <script>
+        // --- Operasi Vektor Dasar ---
+        const vec3 = {
+            sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+            add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+            cross: (a, b) => [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+            ],
+            dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+            normalize: (v) => {
+                let len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                if (len === 0) return [0, 0, 0];
+                return [v[0] / len, v[1] / len, v[2] / len];
+            },
+            scale: (v, s) => [v[0] * s, v[1] * s, v[2] * s]
+        };
+
+        // --- Operasi Matriks Dasar ---
+        // Format array 1D berisi 16 elemen (Column-Major di memori, standard WebGL)
+        const mat4 = {
+            create: () => new Float32Array([
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ]),
+            multiply: (a, b) => {
+                let out = new Float32Array(16);
+                for (let i = 0; i < 4; i++) { // Kolom
+                    for (let j = 0; j < 4; j++) { // Baris
+                        out[i * 4 + j] = 
+                            b[i * 4 + 0] * a[0 * 4 + j] +
+                            b[i * 4 + 1] * a[1 * 4 + j] +
+                            b[i * 4 + 2] * a[2 * 4 + j] +
+                            b[i * 4 + 3] * a[3 * 4 + j];
+                    }
+                }
+                return out;
+            }
+        };
+
+        // Menghitung View Matrix
+        function lookAt(eye, target, tiltDeg) {
+            let forward = vec3.normalize(vec3.sub(target, eye));
+            
+            // Tentukan basis vektor Up sementara (Y-up)
+            let tempUp = [0, 1, 0];
+            // Jika kita melihat lurus ke atas/bawah, ganti tempUp agar tidak error (gimbal lock)
+            if (Math.abs(forward[0]) < 0.001 && Math.abs(forward[2]) < 0.001) {
+                tempUp = [0, 0, -1];
+            }
+
+            let right = vec3.normalize(vec3.cross(forward, tempUp));
+            let trueUp = vec3.normalize(vec3.cross(right, forward));
+
+            // Aplikasikan kemiringan (Roll) terhadap sumbu pandang (forward)
+            let tiltRad = tiltDeg * Math.PI / 180;
+            let cosT = Math.cos(tiltRad);
+            let sinT = Math.sin(tiltRad);
+            
+            let upTilted = vec3.add(
+                vec3.scale(trueUp, cosT),
+                vec3.scale(right, sinT)
+            );
+
+            // Hitung ulang sumbu X dan Y berdasarkan Up yang sudah dimiringkan
+            let zAxis = vec3.normalize(vec3.sub(eye, target)); // +Z mengarah ke luar layar
+            let xAxis = vec3.normalize(vec3.cross(upTilted, zAxis));
+            let yAxis = vec3.cross(zAxis, xAxis);
+
+            let out = mat4.create();
+            out[0] = xAxis[0]; out[4] = xAxis[1]; out[8]  = xAxis[2]; out[12] = -vec3.dot(xAxis, eye);
+            out[1] = yAxis[0]; out[5] = yAxis[1]; out[9]  = yAxis[2]; out[13] = -vec3.dot(yAxis, eye);
+            out[2] = zAxis[0]; out[6] = zAxis[1]; out[10] = zAxis[2]; out[14] = -vec3.dot(zAxis, eye);
+            out[3] = 0;        out[7] = 0;        out[11] = 0;        out[15] = 1;
+
+            return out;
+        }
+
+        // Menghitung Perspective Projection Matrix
+        function perspective(fovDeg, aspect, near, far) {
+            let fovRad = fovDeg * Math.PI / 180;
+            let f = 1.0 / Math.tan(fovRad / 2);
+            let nf = 1 / (near - far);
+
+            let out = new Float32Array(16);
+            out[0] = f / aspect;
+            out[5] = f;
+            out[10] = (far + near) * nf;
+            out[11] = -1;
+            out[14] = (2 * far * near) * nf;
+            out[15] = 0;
+
+            return out;
+        }
+
+        // --- Render UI ---
+        function renderMatrixToTable(matrix, tableId) {
+            const table = document.getElementById(tableId);
+            table.innerHTML = "";
+            
+            // Karena array menggunakan format Column-Major, kita membacanya secara Row-Major untuk ditampilkan
+            for (let row = 0; row < 4; row++) {
+                let tr = document.createElement("tr");
+                for (let col = 0; col < 4; col++) {
+                    let td = document.createElement("td");
+                    let val = matrix[col * 4 + row]; // Konversi Col-Major ke Row-Major
+                    
+                    // Bersihkan error floating point kecil (misal -0.0000000000001 jadi 0)
+                    if (Math.abs(val) < 0.0001) val = 0;
+                    
+                    td.textContent = val.toFixed(4);
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+        }
+
+        function updateMatrices() {
+            // Ambil Input
+            let eye = [
+                parseFloat(document.getElementById('eyeX').value),
+                parseFloat(document.getElementById('eyeY').value),
+                parseFloat(document.getElementById('eyeZ').value)
+            ];
+            let target = [
+                parseFloat(document.getElementById('targetX').value),
+                parseFloat(document.getElementById('targetY').value),
+                parseFloat(document.getElementById('targetZ').value)
+            ];
+            let tilt = parseFloat(document.getElementById('tilt').value);
+            
+            let fov = parseFloat(document.getElementById('fov').value);
+            let aspect = parseFloat(document.getElementById('aspect').value);
+            let near = parseFloat(document.getElementById('near').value);
+            let far = parseFloat(document.getElementById('far').value);
+
+            // Hitung Matriks
+            let vMatrix = lookAt(eye, target, tilt);
+            let pMatrix = perspective(fov, aspect, near, far);
+            let vpMatrix = mat4.multiply(pMatrix, vMatrix);
+
+            // Tampilkan
+            renderMatrixToTable(vMatrix, 'viewMatrix');
+            renderMatrixToTable(pMatrix, 'projMatrix');
+            renderMatrixToTable(vpMatrix, 'vpMatrix');
+        }
+
+        // Hitung pertama kali saat load
+        window.onload = updateMatrices;
+    </script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+web1: https://gemini.google.com/share/78e7f86457c7
+web2: https://gemini.google.com/share/e72a872255b1
+web3: https://gemini.google.com/share/c73c29e8fe7f

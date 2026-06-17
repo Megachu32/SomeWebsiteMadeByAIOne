@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulasi Cahaya Diffusi 3D + Vektor Dinamis</title>
+    <style>
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #fff; }
+        /* Layout Kiri & Kanan */
+        #left-panel { flex: 6; position: relative; overflow: hidden; }
+        #right-panel { flex: 4; background: #2d2d2d; border-left: 2px solid #444; display: flex; flex-direction: column; overflow-y: auto; }
+        
+        /* Navigasi Tab */
+        .tab-header { display: flex; background: #1e1e1e; border-bottom: 2px solid #444; }
+        .tab-btn { flex: 1; padding: 15px; cursor: pointer; text-align: center; font-weight: bold; background: none; color: #aaa; border: none; outline: none; transition: 0.3s; }
+        .tab-btn.active { color: #fff; background: #3d3d3d; border-bottom: 3px solid #4caf50; }
+        .tab-btn:hover { background: #333; }
+        
+        /* Konten Tab */
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+        
+        /* Elemen Form */
+        h3 { border-bottom: 1px solid #555; padding-bottom: 5px; margin-top: 0; }
+        .control-group { margin-bottom: 20px; background: #3a3a3a; padding: 10px; border-radius: 5px; }
+        .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .row label { width: 30px; font-weight: bold;}
+        input[type="number"] { width: 60px; padding: 5px; background: #222; border: 1px solid #555; color: #fff; border-radius: 3px; }
+        input[type="color"] { border: none; background: none; width: 40px; height: 30px; cursor: pointer; }
+        button { background: #4caf50; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #45a049; }
+        
+        /* Teks Perhitungan */
+        .math-step { font-family: 'Courier New', Courier, monospace; background: #111; padding: 10px; border-radius: 5px; margin-bottom: 10px; white-space: pre-wrap; font-size: 14px;}
+        .highlight { color: #4caf50; font-weight: bold; }
+        
+        /* Instruksi Canvas & Label Vektor */
+        #overlay-text { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; pointer-events: none; z-index: 10;}
+        
+        /* Style untuk Label Vektor CSS2D */
+        .vector-label {
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 5px;
+            border-radius: 3px;
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+</head>
+<body>
+
+    <div id="left-panel">
+        <div id="overlay-text">
+            <strong>Kontrol Kamera:</strong><br>
+            * Klik Kiri + Drag: Putar<br>
+            * Scroll / Tombol Q & E: Zoom In/Out<br>
+            * Klik Kanan + Drag: Geser (Pan)
+        </div>
+    </div>
+
+    <div id="right-panel">
+        <div class="tab-header">
+            <button class="tab-btn active" onclick="openTab('tab-params', this)">Kontrol Parameter</button>
+            <button class="tab-btn" onclick="openTab('tab-calc', this)">Langkah Perhitungan</button>
+        </div>
+
+        <div id="tab-params" class="tab-content active">
+            <h3>1. Sumber Lampu Virtual</h3>
+            <div id="light-container"></div>
+            <button onclick="addLight()">+ Tambah Lampu</button>
+            <br><br>
+
+            <h3>2. Warna Tekstur Benda</h3>
+            <div class="control-group row">
+                <span>Warna Permukaan:</span>
+                <input type="color" id="obj-color" value="#ffffff" onchange="updateScene()">
+            </div>
+
+            <h3>3. Daftar Verteks Objek</h3>
+            <div id="vertex-container"></div>
+            <button onclick="addVertex()">+ Tambah Verteks</button>
+            <br><br>
+
+            <h3>4. Import / Export Parameter</h3>
+            <div class="control-group">
+                <textarea id="io-textarea" style="width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #555; font-family: monospace; border-radius: 3px; box-sizing: border-box; padding: 5px;" placeholder="Salin kode string di sini untuk Import atau klik Export..."></textarea>
+                <div class="row" style="margin-top: 10px; margin-bottom: 0;">
+                    <button onclick="exportData()" style="background: #2196F3;">Export Data</button>
+                    <button onclick="importData()" style="background: #ff9800;">Import Data</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-calc" class="tab-content">
+            <h3>Kalkulasi Cahaya Diffusi Real-time</h3>
+            <p style="font-size: 12px; color: #aaa;">Perhitungan disimulasikan secara dinamis pada <strong>Bidang Segitiga Terdekat</strong> dengan kamera dan <strong>Seluruh Lampu</strong> yang ada.</p>
+            <div id="calculation-steps"></div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // INISIALISASI VARIABEL & STATE
+        // ==========================================
+        let scene, camera, renderer, labelRenderer, controls;
+        let objectMesh = null;
+        let lightMeshes = [];
+        let sceneLights = [];
+        
+        let vectorHelpers = []; 
+        let vectorLabels = [];
+
+        let lightsData = [
+            { id: 1, x: 10, y: 10, z: 10, color: '#ffddaa' }
+        ];
+        
+        let verticesData = [
+            { id: 1, name: "V1", x: 6, y: 0, z: 0 },
+            { id: 2, name: "V2", x: -6, y: 0, z: 0 },
+            { id: 3, name: "V3", x: 0, y: 6, z: 0 },
+            { id: 4, name: "V4", x: 0, y: -6, z: 0 },
+            { id: 5, name: "V5", x: 0, y: 0, z: 6 },
+            { id: 6, name: "V6", x: 0, y: 0, z: -6 }
+        ];
+
+        const faces = [
+            [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2],
+            [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]
+        ];
+
+        // ==========================================
+        // FUNGSI UI & DOM
+        // ==========================================
+        function openTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        function renderLightUI() {
+            const container = document.getElementById('light-container');
+            container.innerHTML = '';
+            lightsData.forEach((l, index) => {
+                container.innerHTML += `
+                    <div class="control-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <strong>Lampu ${index + 1}</strong>
+                            <button onclick="deleteLight(${index})" style="background: #f44336; padding: 3px 8px; font-size: 11px;">Hapus</button>
+                        </div>
+                        <div class="row">
+                            <label>X:</label><input type="number" value="${l.x}" step="1" onchange="updateLight(${index}, 'x', this.value)">
+                            <label>Y:</label><input type="number" value="${l.y}" step="1" onchange="updateLight(${index}, 'y', this.value)">
+                            <label>Z:</label><input type="number" value="${l.z}" step="1" onchange="updateLight(${index}, 'z', this.value)">
+                        </div>
+                        <div class="row" style="margin-bottom: 0;">
+                            <label>RGB:</label>
+                            <input type="color" value="${l.color}" onchange="updateLight(${index}, 'color', this.value)">
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderVertexUI() {
+            const container = document.getElementById('vertex-container');
+            container.innerHTML = '';
+            verticesData.forEach((v, index) => {
+                container.innerHTML += `
+                    <div class="control-group row" style="justify-content: space-between; align-items: center;">
+                        <div class="row" style="margin-bottom: 0;">
+                            <label>${v.name}</label>
+                            X:<input type="number" value="${v.x}" step="1" onchange="updateVertex(${index}, 'x', this.value)">
+                            Y:<input type="number" value="${v.y}" step="1" onchange="updateVertex(${index}, 'y', this.value)">
+                            Z:<input type="number" value="${v.z}" step="1" onchange="updateVertex(${index}, 'z', this.value)">
+                        </div>
+                        <button onclick="deleteVertex(${index})" style="background: #f44336; padding: 3px 8px; font-size: 11px;">Hapus</button>
+                    </div>
+                `;
+            });
+        }
+
+        function addLight() {
+            lightsData.push({ id: Date.now(), x: 5, y: 10, z: 5, color: '#ffffff' });
+            renderLightUI(); updateScene();
+        }
+
+        function addVertex() {
+            const id = verticesData.length + 1;
+            verticesData.push({ id: Date.now(), name: `V${id}`, x: 0, y: 0, z: 0 });
+            renderVertexUI(); updateScene();
+        }
+
+        function deleteLight(index) {
+            if (lightsData.length <= 1) {
+                alert("Minimal harus disisakan 1 lampu di dalam sistem simulation.");
+                return;
+            }
+            lightsData.splice(index, 1);
+            renderLightUI(); updateScene();
+        }
+
+        function deleteVertex(index) {
+            if (verticesData.length <= 3) {
+                alert("Minimal harus disisakan 3 verteks agar kalkulasi bidang segitiga tetap berjalan.");
+                return;
+            }
+            verticesData.splice(index, 1);
+            verticesData.forEach((v, idx) => { v.name = `V${idx + 1}`; });
+            renderVertexUI(); updateScene();
+        }
+
+        function updateLight(index, key, value) {
+            lightsData[index][key] = key === 'color' ? value : parseFloat(value);
+            updateScene();
+        }
+
+        function updateVertex(index, key, value) {
+            verticesData[index][key] = parseFloat(value);
+            updateScene();
+        }
+
+        function exportData() {
+            const payload = { lights: lightsData, vertices: verticesData, textureColor: document.getElementById('obj-color').value };
+            document.getElementById('io-textarea').value = JSON.stringify(payload);
+        }
+
+        function importData() {
+            const rawString = document.getElementById('io-textarea').value.trim();
+            if (!rawString) { alert("Kotak teks kosong."); return; }
+            try {
+                const parsed = JSON.parse(rawString);
+                if (parsed.lights && parsed.vertices && parsed.textureColor) {
+                    lightsData = parsed.lights; verticesData = parsed.vertices;
+                    document.getElementById('obj-color').value = parsed.textureColor;
+                    renderLightUI(); renderVertexUI(); updateScene();
+                    alert("Parameter berhasil di-import!");
+                } else { alert("Format string salah."); }
+            } catch (e) { alert("Gagal membaca string. Pastikan JSON valid."); }
+        }
+
+        // ==========================================
+        // THREE.JS SCENE SETUP
+        // ==========================================
+        function initThreeJS() {
+            const container = document.getElementById('left-panel');
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(15, 15, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            labelRenderer = new THREE.CSS2DRenderer();
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            container.appendChild(labelRenderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            
+            // Tambahkan event listener saat kamera berubah untuk perbarui Normal terdekat
+            controls.addEventListener('change', updateCalculationAndVectors);
+
+            window.addEventListener('keydown', (e) => {
+                if(e.key.toLowerCase() === 'e') { camera.position.multiplyScalar(1 - 0.05); updateCalculationAndVectors(); } 
+                if(e.key.toLowerCase() === 'q') { camera.position.multiplyScalar(1 + 0.05); updateCalculationAndVectors(); } 
+            });
+
+            const gridHelper = new THREE.GridHelper(30, 30, 0x555555, 0x222222);
+            scene.add(gridHelper);
+            const axesHelper = new THREE.AxesHelper(15);
+            scene.add(axesHelper);
+
+            scene.add(new THREE.AmbientLight(0x222222));
+
+            window.addEventListener('resize', () => {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+                labelRenderer.setSize(width, height);
+            });
+
+            renderLightUI();
+            renderVertexUI();
+            updateScene();
+            animate();
+        }
+
+        function clearVectorVisuals() {
+            vectorHelpers.forEach(h => scene.remove(h));
+            vectorLabels.forEach(l => scene.remove(l));
+            vectorHelpers = [];
+            vectorLabels = [];
+        }
+
+        function createVectorLabel(text, position, color) {
+            const div = document.createElement('div');
+            div.className = 'vector-label';
+            div.textContent = text;
+            div.style.color = color;
+            
+            const label = new THREE.CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+            vectorLabels.push(label);
+        }
+
+        function updateScene() {
+            if (objectMesh) { scene.remove(objectMesh); objectMesh.geometry.dispose(); objectMesh.material.dispose(); }
+            lightMeshes.forEach(m => scene.remove(m)); lightMeshes = [];
+            sceneLights.forEach(l => scene.remove(l)); sceneLights = [];
+            
+            clearVectorVisuals();
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            
+            const faceIndices = faces.flat();
+            faceIndices.forEach(idx => {
+                if(verticesData[idx]) {
+                    positions.push(verticesData[idx].x, verticesData[idx].y, verticesData[idx].z);
+                }
+            });
+
+            if(positions.length > 0) {
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.computeVertexNormals();
+
+                const objColor = document.getElementById('obj-color').value;
+                const material = new THREE.MeshLambertMaterial({ 
+                    color: objColor, 
+                    side: THREE.DoubleSide 
+                });
+                objectMesh = new THREE.Mesh(geometry, material);
+                scene.add(objectMesh);
+            }
+
+            lightsData.forEach(lData => {
+                const color = new THREE.Color(lData.color);
+                const pLight = new THREE.PointLight(color, 1, 100);
+                pLight.position.set(lData.x, lData.y, lData.z);
+                scene.add(pLight);
+                sceneLights.push(pLight);
+
+                const bulbGeo = new THREE.SphereGeometry(0.5, 16, 16);
+                const bulbMat = new THREE.MeshBasicMaterial({ color: color });
+                const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+                bulbMesh.position.set(lData.x, lData.y, lData.z);
+                scene.add(bulbMesh);
+                lightMeshes.push(bulbMesh);
+            });
+
+            updateCalculationAndVectors();
+        }
+
+        // ==========================================
+        // KALKULASI & VISUALISASI VEKTOR (Dinamis)
+        // ==========================================
+        function hexToRgbVector(hex) {
+            const r = parseInt(hex.slice(1, 3), 16) / 255;
+            const g = parseInt(hex.slice(3, 5), 16) / 255;
+            const b = parseInt(hex.slice(5, 7), 16) / 255;
+            return {r, g, b};
+        }
+
+        function updateCalculationAndVectors() {
+            clearVectorVisuals();
+
+            if (verticesData.length < 3 || lightsData.length === 0) {
+                document.getElementById('calculation-steps').innerHTML = "<p>Dibutuhkan minimal 3 verteks dan 1 lampu.</p>";
+                return;
+            }
+
+            // --- 1. CARI BIDANG TERDEKAT DENGAN KAMERA ---
+            let minDistance = Infinity;
+            let closestNormal = null;
+            let closestCenter = null;
+            let closestVerts = [];
+            let vNames = [];
+
+            faces.forEach(faceIndices => {
+                const i0 = faceIndices[0], i1 = faceIndices[1], i2 = faceIndices[2];
+                if (verticesData[i0] && verticesData[i1] && verticesData[i2]) {
+                    const va = new THREE.Vector3(verticesData[i0].x, verticesData[i0].y, verticesData[i0].z);
+                    const vb = new THREE.Vector3(verticesData[i1].x, verticesData[i1].y, verticesData[i1].z);
+                    const vc = new THREE.Vector3(verticesData[i2].x, verticesData[i2].y, verticesData[i2].z);
+
+                    const center = new THREE.Vector3().addVectors(va, vb).add(vc).divideScalar(3);
+                    const dist = camera.position.distanceTo(center);
+
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestCenter = center;
+                        closestVerts = [va, vb, vc];
+                        vNames = [verticesData[i0].name, verticesData[i1].name, verticesData[i2].name];
+
+                        const edge1 = new THREE.Vector3().subVectors(vb, va);
+                        const edge2 = new THREE.Vector3().subVectors(vc, va);
+                        closestNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+
+                        // Pastikan arah normal menghadap kamera
+                        const viewDir = new THREE.Vector3().subVectors(camera.position, center).normalize();
+                        if (closestNormal.dot(viewDir) < 0) {
+                            closestNormal.negate();
+                        }
+                    }
+                }
+            });
+
+            if (!closestCenter) return; // Jika tidak ada muka valid
+
+            // --- 2. GAMBAR VEKTOR N ---
+            const arrowLength = 5;
+            const nArrow = new THREE.ArrowHelper(closestNormal, closestCenter, arrowLength, 0x33ff33, 1, 0.5);
+            scene.add(nArrow);
+            vectorHelpers.push(nArrow);
+            createVectorLabel('N', closestCenter.clone().add(closestNormal.clone().multiplyScalar(arrowLength + 0.5)), '#33ff33');
+
+            // --- 3. KALKULASI TEKS (TAB KANAN) & VEKTOR MULTI-LAMPU ---
+            let html = "";
+            const OColor = hexToRgbVector(document.getElementById('obj-color').value);
+            
+            html += `<div class="math-step">
+<b>Tahap 1: Bidang Terdekat & Normal Bidang (N)</b>
+Mendeteksi ${vNames[0]}, ${vNames[1]}, dan ${vNames[2]} sebagai bidang terdekat ke kamera.
+Titik Pusat Bidang (P) = (${closestCenter.x.toFixed(2)}, ${closestCenter.y.toFixed(2)}, ${closestCenter.z.toFixed(2)})
+
+Vektor Normal (Disesuaikan mengarah ke kamera):
+N = <span style="color:#33ff33">(${closestNormal.x.toFixed(3)}, ${closestNormal.y.toFixed(3)}, ${closestNormal.z.toFixed(3)})</span>
+</div>`;
+
+            let htmlLangkahL = "";
+            let htmlLangkahI = "";
+            let finalR = 0, finalG = 0, finalB = 0;
+
+            lightsData.forEach((light, index) => {
+                const num = index + 1;
+                const LPos = new THREE.Vector3(light.x, light.y, light.z);
+                const LColor = hexToRgbVector(light.color);
+                
+                // Kalkulasi L
+                const lightDir = new THREE.Vector3().subVectors(LPos, closestCenter).normalize();
+                
+                // Gambar Vektor L
+                const lArrow = new THREE.ArrowHelper(lightDir, closestCenter, arrowLength, 0xffff33, 1, 0.5);
+                scene.add(lArrow);
+                vectorHelpers.push(lArrow);
+                createVectorLabel(`L${num}`, closestCenter.clone().add(lightDir.clone().multiplyScalar(arrowLength + 0.5)), '#ffff33');
+
+                // Intensitas
+                const dotProduct = closestNormal.dot(lightDir);
+                const intensity = Math.max(0, dotProduct);
+
+                htmlLangkahL += `Posisi Lampu ${num} (Pl${num}) = (${LPos.x}, ${LPos.y}, ${LPos.z})
+<span style="color:#ffff33">L${num}</span> = Normalisasi(Pl${num} - P) = (${lightDir.x.toFixed(3)}, ${lightDir.y.toFixed(3)}, ${lightDir.z.toFixed(3)})\n\n`;
+
+                htmlLangkahI += `Lampu ${num}: maks(0, N · L${num}) = <span class="highlight">${intensity.toFixed(3)}</span>\n`;
+
+                // Akumulasi Warna
+                finalR += LColor.r * OColor.r * intensity;
+                finalG += LColor.g * OColor.g * intensity;
+                finalB += LColor.b * OColor.b * intensity;
+            });
+
+            html += `<div class="math-step">
+<b>Tahap 2: Vektor Arah Cahaya (L)</b>
+${htmlLangkahL.trim()}
+</div>`;
+
+            html += `<div class="math-step">
+<b>Tahap 3: Intensitas Diffuse Tiap Lampu</b>
+${htmlLangkahI.trim()}
+</div>`;
+
+            // Pembatasan nilai (Clamp) maksimum 1
+            finalR = Math.min(1, finalR);
+            finalG = Math.min(1, finalG);
+            finalB = Math.min(1, finalB);
+
+            const displayR = Math.round(finalR * 255);
+            const displayG = Math.round(finalG * 255);
+            const displayB = Math.round(finalB * 255);
+
+            html += `<div class="math-step">
+<b>Tahap 4: Akumulasi Warna Akhir</b>
+Rumus: Sum(C_lampu_i * C_objek * I_i)
+
+Komp. Merah (R): Total = ${finalR.toFixed(3)}
+Komp. Hijau (G): Total = ${finalG.toFixed(3)}
+Komp. Biru  (B): Total = ${finalB.toFixed(3)}
+
+Konversi ke RGB Akhir (Dibatasi 255):
+<span class="highlight">RGB(${displayR}, ${displayG}, ${displayB})</span>
+<div style="width: 100%; height: 20px; background: rgb(${displayR}, ${displayG}, ${displayB}); border: 1px solid #555; margin-top: 5px; border-radius: 3px;"></div>
+</div>`;
+
+            document.getElementById('calculation-steps').innerHTML = html;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        window.onload = initThreeJS;
+    </script>
+</body>
+</html>

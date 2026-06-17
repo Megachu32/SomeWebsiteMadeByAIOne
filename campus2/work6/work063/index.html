@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray-Sphere Intersection Calculator</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 900px; margin: auto; background: #f9fafb; color: #111827; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        label { display: block; margin-top: 10px; font-weight: 500; font-size: 0.9em; color: #4b5563; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: 4px; }
+        .matrix { display: inline-block; padding: 5px 15px; border-left: 2px solid #111; border-right: 2px solid #111; border-radius: 4px; font-family: monospace; background: #f3f4f6; text-align: center; margin: 10px 0; }
+        .step { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #3b82f6; }
+        .highlight { background: #dcfce7; padding: 10px; border-radius: 5px; border: 1px solid #86efac; font-weight: bold; color: #166534; }
+        h3 { margin-top: 0; color: #1f2937; }
+    </style>
+</head>
+<body>
+
+    <h2>Simulasi Hitung Raytracing: Ray vs Sphere</h2>
+    
+    <div class="grid">
+        <div class="card">
+            <h3>Posisi Kamera (O)</h3>
+            <label>X: <input type="number" id="camX" value="5" step="0.1" oninput="calculate()"></label>
+            <label>Y: <input type="number" id="camY" value="5" step="0.1" oninput="calculate()"></label>
+            <label>Z: <input type="number" id="camZ" value="0" step="0.1" oninput="calculate()"></label>
+        </div>
+        <div class="card">
+            <h3>Koordinat Piksel/Layar</h3>
+            <label>X: <input type="number" id="pixX" value="4" step="0.1" oninput="calculate()"></label>
+            <label>Y: <input type="number" id="pixY" value="4" step="0.1" oninput="calculate()"></label>
+            <label>Z: <input type="number" id="pixZ" value="1" step="0.1" oninput="calculate()"></label>
+        </div>
+        <div class="card">
+            <h3>Properti Bola</h3>
+            <label>Pusat X: <input type="number" id="sphX" value="-2" step="0.1" oninput="calculate()"></label>
+            <label>Pusat Y: <input type="number" id="sphY" value="-2" step="0.1" oninput="calculate()"></label>
+            <label>Pusat Z: <input type="number" id="sphZ" value="5" step="0.1" oninput="calculate()"></label>
+            <label>Radius (R): <input type="number" id="sphR" value="4" step="0.1" oninput="calculate()"></label>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        function val(id) { return parseFloat(document.getElementById(id).value) || 0; }
+        function f(n) { return n.toFixed(3); }
+        function dot(v1, v2) { return v1.x*v2.x + v1.y*v2.y + v1.z*v2.z; }
+        function add(v1, v2) { return {x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z}; }
+        function mul(v, s) { return {x: v.x * s, y: v.y * s, z: v.z * s}; }
+
+        function calculate() {
+            // 1. Ambil Input
+            let O = { x: val('camX'), y: val('camY'), z: val('camZ') };
+            let Pix = { x: val('pixX'), y: val('pixY'), z: val('pixZ') };
+            let C = { x: val('sphX'), y: val('sphY'), z: val('sphZ') };
+            let R = Math.max(0.001, val('sphR')); // Hindari bagi nol
+
+            // 2. Arah Sinar (Direction)
+            let D = { x: Pix.x - O.x, y: Pix.y - O.y, z: Pix.z - O.z };
+
+            // 3. Matriks Transformasi M & Invers M^-1
+            let M_html = `
+                [${f(R)} &nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; ${f(C.x)}]<br>
+                [&nbsp;0 &nbsp;&nbsp; ${f(R)} &nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; ${f(C.y)}]<br>
+                [&nbsp;0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp; ${f(R)} &nbsp;&nbsp; ${f(C.z)}]<br>
+                [&nbsp;0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp;&nbsp; 1 &nbsp;]
+            `;
+            let invR = 1/R;
+            let Minv_html = `
+                [${f(invR)} &nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp; ${f(-C.x/R)}]<br>
+                [&nbsp;0 &nbsp;&nbsp; ${f(invR)} &nbsp;&nbsp; 0 &nbsp;&nbsp; ${f(-C.y/R)}]<br>
+                [&nbsp;0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp; ${f(invR)} &nbsp; ${f(-C.z/R)}]<br>
+                [&nbsp;0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp; 0 &nbsp;&nbsp;&nbsp;&nbsp; 1 &nbsp;]
+            `;
+
+            // 4. Transformasi Ruang Objek (Kalikan M^-1 dengan O dan D)
+            // O' = M^-1 * O (Point, w=1)
+            let O_prime = {
+                x: (O.x - C.x) / R,
+                y: (O.y - C.y) / R,
+                z: (O.z - C.z) / R
+            };
+            // D' = M^-1 * D (Vector, w=0)
+            let D_prime = {
+                x: D.x / R,
+                y: D.y / R,
+                z: D.z / R
+            };
+
+            // 5. Hitung Persamaan Kuadrat
+            let a = dot(D_prime, D_prime);
+            let b = 2 * dot(O_prime, D_prime);
+            let c = dot(O_prime, O_prime) - 1;
+            let discriminant = (b * b) - (4 * a * c);
+
+            let out = `
+                <div class="step">
+                    <h3>Langkah 1: Tentukan Arah Sinar (D)</h3>
+                    D = Piksel - Kamera <br>
+                    D = (${f(Pix.x)} - ${f(O.x)}, ${f(Pix.y)} - ${f(O.y)}, ${f(Pix.z)} - ${f(O.z)}) = <b>(${f(D.x)}, ${f(D.y)}, ${f(D.z)})</b>
+                </div>
+
+                <div class="step">
+                    <h3>Langkah 2: Matriks Transformasi Bola (M) dan Invers (M⁻¹)</h3>
+                    <p>M (Translasi & Skala):</p>
+                    <div class="matrix">${M_html}</div>
+                    <p>M⁻¹ (Invers):</p>
+                    <div class="matrix">${Minv_html}</div>
+                </div>
+
+                <div class="step">
+                    <h3>Langkah 3: Transformasi Sinar ke Ruang Objek</h3>
+                    O' (Asal transform) = M⁻¹ × O = <b>(${f(O_prime.x)}, ${f(O_prime.y)}, ${f(O_prime.z)})</b><br>
+                    D' (Arah transform) = M⁻¹ × D = <b>(${f(D_prime.x)}, ${f(D_prime.y)}, ${f(D_prime.z)})</b>
+                </div>
+
+                <div class="step">
+                    <h3>Langkah 4: Hitung Persamaan Kuadrat (at² + bt + c = 0)</h3>
+                    a = D' · D' = ${f(a)} <br>
+                    b = 2(O' · D') = ${f(b)} <br>
+                    c = (O' · O') - 1 = ${f(c)} <br><br>
+                    Diskriminan (Δ) = b² - 4ac = (${f(b)})² - 4(${f(a)})(${f(c)}) = <b>${f(discriminant)}</b>
+                </div>
+            `;
+
+            if (discriminant < 0) {
+                out += `<div class="step highlight" style="background:#fee2e2; border-color:#fca5a5; color:#991b1b;">
+                    <h3>Langkah 5: Hasil</h3>
+                    Δ < 0 (${f(discriminant)}). Sinar meleset. <b>Tidak ada perpotongan.</b>
+                </div>`;
+            } else {
+                let sqrtD = Math.sqrt(discriminant);
+                let t1 = (-b - sqrtD) / (2 * a);
+                let t2 = (-b + sqrtD) / (2 * a);
+                
+                let P1 = add(O, mul(D, t1));
+                let P2 = add(O, mul(D, t2));
+
+                let resultHtml = `<h3>Langkah 5: Hitung Akar (Jarak 't')</h3>
+                                  Karena Δ ≥ 0, sinar mengenai bola.<br>
+                                  t₁ = (-b - √Δ) / 2a = <b>${f(t1)}</b><br>
+                                  t₂ = (-b + √Δ) / 2a = <b>${f(t2)}</b><br>`;
+
+                let closest = "";
+                if (t1 > 0 && t2 > 0) {
+                    closest = `Titik terdekat adalah <b>P₁</b> (t = ${f(t1)}) karena nilainya paling kecil positif (paling dekat dengan kamera).`;
+                } else if (t1 > 0) {
+                    closest = `Titik terdekat adalah <b>P₁</b> (t = ${f(t1)}). P₂ ada di belakang mata.`;
+                } else if (t2 > 0) {
+                    closest = `Titik terdekat adalah <b>P₂</b> (t = ${f(t2)}). P₁ ada di belakang mata (di dalam bola).`;
+                } else {
+                    closest = `Kedua titik berada di belakang mata (t negatif). Bola tidak terlihat oleh kamera.`;
+                }
+
+                out += `<div class="step">
+                    ${resultHtml}
+                </div>
+                
+                <div class="step highlight">
+                    <h3>Perpotongan yang Mungkin Terjadi</h3>
+                    <b>Titik Koordinat Dunia P(t) = O + tD:</b><br><br>
+                    P₁ = (${f(P1.x)}, ${f(P1.y)}, ${f(P1.z)})<br>
+                    P₂ = (${f(P2.x)}, ${f(P2.y)}, ${f(P2.z)})
+                </div>
+                
+                <div class="step highlight" style="background:#e0f2fe; border-color:#7dd3fc; color:#0369a1;">
+                    <h3>Kesimpulan (Titik Terdekat ke Mata)</h3>
+                    ${closest}
+                </div>`;
+            }
+
+            document.getElementById('output').innerHTML = out;
+        }
+
+        // Jalankan saat pertama load
+        calculate();
+    </script>
+</body>
+</html>
